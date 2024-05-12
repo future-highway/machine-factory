@@ -1,0 +1,78 @@
+[package]
+name = "machine-factory"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+heck = "0.5"
+paste = "1"
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["extra-traits", "full"] }
+
+[dev-dependencies]
+tap = "1"
+
+[lints.rust]
+# start groups
+warnings = { level = "warn", priority = -2 }
+future_incompatible = { level = "warn", priority = -1 }
+let_underscore = { level = "warn", priority = -1 }
+nonstandard_style = { level = "warn", priority = -1 }
+rust_2018_compatibility = { level = "warn", priority = -1 }
+rust_2018_idioms = { level = "warn", priority = -1 }
+rust_2021_compatibility = { level = "warn", priority = -1 }
+unused = { level = "warn", priority = -1 }
+# end groups
+absolute_paths_not_starting_with_crate = "warn"
+improper_ctypes = "warn"
+non_shorthand_field_patterns = "warn"
+no_mangle_generic_items = "warn"
+unused_comparisons = "warn"
+while_true = "warn"
+missing_debug_implementations = "warn"
+missing_docs = "warn"
+trivial_casts = "warn"
+trivial_numeric_casts = "warn"
+unused_extern_crates = "warn"
+unused_import_braces = "warn"
+unused_results = "warn"
+
+[lints.clippy]
+# start groups
+complexity = { level = "warn", priority = -1 }
+correctness = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+restriction = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+# end groupsms
+blanket_clippy_restriction_lints = "allow" # this doesn't seem to work (CLI arg does)
+exhaustive_enums = "allow"
+exhaustive_structs = "allow"
+expect_used = "allow"
+implicit_return = "allow"
+min_ident_chars = "allow"
+missing_docs_in_private_items = "allow"
+module_name_repetitions = "allow"
+pattern_type_mismatch = "allow"
+pub_use = "allow"
+pub_with_shorthand = "allow"
+question_mark_used = "allow"
+redundant_pub_crate = "allow"
+self_named_module_files = "allow"
+semicolon_outside_block = "allow"
+separated_literal_suffix = "allow"
+shadow_same = "allow"
+shadow_reuse = "allow"
+shadow_unrelated = "allow"
+similar_names = "allow"
+single_call_fn = "allow"
+single_char_lifetime_names = "allow"
+unreachable = "allow"
