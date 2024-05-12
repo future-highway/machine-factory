@@ -25,6 +25,10 @@ struct EmergencyEvent;
 
 impl TrafficLightEvent for EmergencyEvent {}
 
+#[derive(Debug, Clone)]
+struct ChaosEvent;
+impl TrafficLightEvent for ChaosEvent {}
+
 #[derive(Default, Debug, Clone)]
 struct Red;
 
@@ -77,23 +81,42 @@ state_machine!(
         transitions: [
             Red {
                 // From Red to Green when a TimeoutEvent occurs
-                TimeoutEvent -> Green {
+                TimeoutEvent {
                     println!("{:?}: Changing to Green", Instant::now());
-                    Green {}
+                    Green {} // Any state can be returned here
                 },
-                EmergencyEvent -> Red {
+                EmergencyEvent {
                     println!("{:?}: Alredy red. No state change needed", Instant::now());
-                    state
+                    state // Return the current state
+
+                    // Note: even though we don't change the state, the lifecycle methods
+                    // (i.e., on_exit, pre_transition, post_transition, on_enter) will still be called
                 },
+                ChaosEvent {
+                    println!("{:?}: ChaosEvent", Instant::now());
+
+                    // We can't return the state object because they may be different types.
+                    // Instead, we return the state enum variant.
+                    // All state objects implemet the From trait for the state enum, so we can use the into() method.
+                    if context.last_change.elapsed().as_secs() % 2 == 0 {
+                        println!("{:?}: Changing to Green", Instant::now());
+                        TrafficLightMachineState::Green(Green {})
+                    } else {
+                        println!("{:?}: Changing to Yellow", Instant::now());
+                        Yellow {}.into()
+                    }
+                }
             },
             Yellow {
                 // No transition block is provided, so the target state needs to implement Default
                 TimeoutEvent -> Red,
-                EmergencyEvent -> Red
+                EmergencyEvent -> Red,
+                ChaosEvent -> Green,
             },
             Green {
                 TimeoutEvent -> Yellow,
-                EmergencyEvent -> Red
+                EmergencyEvent -> Red,
+                ChaosEvent -> Red,
             }
         ],
         // We could also define an unhandled_event block, which would be called when an event is not handled by the state
