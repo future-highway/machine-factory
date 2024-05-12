@@ -28,7 +28,7 @@ struct Machine {
     event_enum_ident: Ident,
     event_trait: syn::ItemTrait,
     transitions: Vec<StateTransitions>,
-    unhanded_event: Option<Block>,
+    unhandled_event: Option<Block>,
 }
 
 impl Parse for Machine {
@@ -47,7 +47,7 @@ impl Parse for Machine {
         let mut event_enum_ident = None;
         let mut event_trait_path = None;
         let mut transitions = None;
-        let mut unhanded_event = None;
+        let mut unhandled_event = None;
 
         while content.peek(Ident) {
             let label: Ident = content.parse()?;
@@ -83,8 +83,8 @@ impl Parse for Machine {
                     let parsed_transitions = parsed_transitions.into_iter().collect();
                     drop(transitions.replace(parsed_transitions));
                 }
-                "unhanded_event" => {
-                    drop(unhanded_event.replace(content.parse()?));
+                "unhandled_event" => {
+                    drop(unhandled_event.replace(content.parse()?));
                 }
                 _ => return Err(syn::Error::new(label.span(), "unrecognized label")),
             }
@@ -123,7 +123,7 @@ impl Parse for Machine {
             event_enum_ident,
             event_trait,
             transitions,
-            unhanded_event,
+            unhandled_event,
         })
     }
 }
@@ -193,7 +193,7 @@ pub(super) fn state_machine(input: TokenStream) -> TokenStream {
         event_enum_ident,
         event_trait,
         transitions,
-        unhanded_event,
+        unhandled_event,
     } = parse_macro_input!(input as Machine);
 
     let state_trait_path= &state_trait.ident;
@@ -422,10 +422,10 @@ pub(super) fn state_machine(input: TokenStream) -> TokenStream {
         }
     };
 
-    let unhanded_event = unhanded_event.unwrap_or_else(|| {
-        syn::parse_quote! {{
-            state
-        }}
+    let unhandled_event = unhandled_event.map(|block| {
+        quote! {
+            (state, event) => #block
+        }
     });
 
     let event_enum = match event_enum(EventEnumInput {
@@ -484,7 +484,7 @@ pub(super) fn state_machine(input: TokenStream) -> TokenStream {
                 
                 let state = match (state, event.into()) {
                     #(#handle_event_match_arms)*
-                    (state, event) => #unhanded_event,
+                    #unhandled_event
                 };
 
                 _ = self.state.replace(state);
