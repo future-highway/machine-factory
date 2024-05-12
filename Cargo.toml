@@ -7,6 +7,9 @@ publish = false
 [lib]
 proc-macro = true
 
+[[example]]
+name = "traffic_light"
+
 [dependencies]
 heck = "0.5"
 paste = "1"

@@ -4,6 +4,7 @@
 #![allow(clippy::missing_trait_methods)]
 #![allow(clippy::single_match_else)]
 #![allow(clippy::wildcard_enum_match_arm)]
+#![allow(missing_docs)]
 
 use machine_factory::state_machine;
 use std::time::Instant;
@@ -175,37 +176,37 @@ impl From<TrafficLightColor> for TrafficLightMachineState {
     }
 }
 
-#[test]
-fn test() {
+fn main() {
     let context = TrafficLightContext {
         last_change: Instant::now(),
     };
 
-    let mut traffic_light = TrafficLightMachine::init(Red, context);
-
-    assert_eq!(
-        traffic_light.state().color(),
-        TrafficLightColor::Red,
-        "Color should be red"
-    );
-
-    _ = traffic_light.handle_event(TrafficLightMachineEvent::TimeoutEvent(TimeoutEvent {}));
-
-    assert_eq!(
-        traffic_light.state().color(),
-        TrafficLightColor::Green,
-        "Color should be green"
-    );
-
-    _ = traffic_light.handle_event(TimeoutEvent {});
-
-    assert_eq!(
-        traffic_light.state().color(),
-        TrafficLightColor::Yellow,
-        "Color should be yellow"
-    );
+    let traffic_light = TrafficLightMachine::init(Red, context);
 
     _ = traffic_light
+        .tap(|x| {
+            assert_eq!(
+                x.state().color(),
+                TrafficLightColor::Red,
+                "Color should be red"
+            );
+        })
+        .handle_event(TrafficLightMachineEvent::TimeoutEvent(TimeoutEvent {}))
+        .tap(|x| {
+            assert_eq!(
+                x.state().color(),
+                TrafficLightColor::Green,
+                "Color should be green"
+            );
+        })
+        .handle_event(TimeoutEvent {})
+        .tap(|x| {
+            assert_eq!(
+                x.state().color(),
+                TrafficLightColor::Yellow,
+                "Color should be yellow"
+            );
+        })
         .handle_event(TimeoutEvent {}) // Red
         .tap(|x| {
             assert_eq!(
