@@ -6,7 +6,7 @@
 #![allow(clippy::wildcard_enum_match_arm)]
 #![allow(missing_docs)]
 
-use machine_factory::state_machine;
+use machine_factory::event_driven_finite_state_machine;
 use std::time::Instant;
 use tap::Tap;
 
@@ -70,7 +70,7 @@ impl TrafficLightState for Green {
 }
 
 // Finally, we define the state machine
-state_machine!(
+event_driven_finite_state_machine!(
     TrafficLightMachine {
         context: TrafficLightContext,
         event_trait: trait TrafficLightEvent {},
