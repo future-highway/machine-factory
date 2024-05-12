@@ -2,6 +2,8 @@
 #![allow(clippy::tests_outside_test_module)]
 #![allow(clippy::use_debug)]
 #![allow(clippy::missing_trait_methods)]
+#![allow(clippy::single_match_else)]
+#![allow(clippy::wildcard_enum_match_arm)]
 
 use machine_factory::state_machine;
 use std::time::Instant;
@@ -21,7 +23,9 @@ impl TrafficLightEvent for TimeoutEvent {
 }
 
 #[derive(Debug, Clone)]
-struct EmergencyEvent;
+struct EmergencyEvent {
+    requested_color: TrafficLightColor,
+}
 
 impl TrafficLightEvent for EmergencyEvent {}
 
@@ -86,18 +90,28 @@ state_machine!(
                     Green {} // Any state can be returned here
                 },
                 EmergencyEvent {
-                    println!("{:?}: Alredy red. No state change needed", Instant::now());
-                    state // Return the current state
-
-                    // Note: even though we don't change the state, the lifecycle methods
-                    // (i.e., on_exit, pre_transition, post_transition, on_enter) will still be called
+                    match event.requested_color {
+                        TrafficLightColor::Red => {
+                            println!("{:?}: Changing to Red", Instant::now());
+                            TrafficLightMachineState::from(state)
+                            // Note: even though we don't change the state, the lifecycle methods
+                            // (i.e., on_exit, pre_transition, post_transition, on_enter) will still be called
+                        }
+                        TrafficLightColor::Yellow => {
+                            println!("{:?}: Changing to Yellow", Instant::now());
+                            Yellow {}.into()
+                        }
+                        TrafficLightColor::Green => {
+                            println!("{:?}: Changing to Green", Instant::now());
+                            Green {}.into()
+                        }
+                    }
                 },
                 ChaosEvent {
                     println!("{:?}: ChaosEvent", Instant::now());
 
                     // We can't return the state object because they may be different types.
                     // Instead, we return the state enum variant.
-                    // All state objects implemet the From trait for the state enum, so we can use the into() method.
                     if context.last_change.elapsed().as_secs() % 2 == 0 {
                         println!("{:?}: Changing to Green", Instant::now());
                         TrafficLightMachineState::Green(Green {})
@@ -110,20 +124,36 @@ state_machine!(
             Yellow {
                 // No transition block is provided, so the target state needs to implement Default
                 TimeoutEvent -> Red,
-                EmergencyEvent -> Red,
+                EmergencyEvent {
+                    let res: TrafficLightMachineState = match event.requested_color {
+                        TrafficLightColor::Red => Red {}.into(),
+                        TrafficLightColor::Yellow => Yellow {}.into(),
+                        TrafficLightColor::Green => Green {}.into(),
+                    };
+
+                    res
+                },
                 ChaosEvent -> Green,
             },
             Green {
                 TimeoutEvent -> Yellow,
-                EmergencyEvent -> Red,
                 ChaosEvent -> Red,
             }
         ],
-        // We could also define an unhandled_event block, which would be called when an event is not handled by the state
-        // unhandled_event: {
-        //     println!("{:?}: Unhandled event: {:?}", Instant::now(), event);
-        //     state
-        // }
+        // We can also define an unhandled_event block, which would be called when an event is not handled by the state
+        unhandled_event: {
+            match event {
+                TrafficLightMachineEvent::EmergencyEvent(EmergencyEvent { requested_color }) => {
+                    println!("{:?}: Emergency event not handled. Requested color: {:?}", Instant::now(), requested_color);
+                    TrafficLightMachineState::from(requested_color)
+                }
+                _ => {
+                    // Here, we've decided that all other unhanded events are the same as changing to the current state.
+                    println!("{:?}: Unhandled event: {:?}", Instant::now(), event);
+                    state
+                }
+            }
+        }
     }
 );
 
@@ -133,6 +163,16 @@ enum TrafficLightColor {
     Red,
     Yellow,
     Green,
+}
+
+impl From<TrafficLightColor> for TrafficLightMachineState {
+    fn from(color: TrafficLightColor) -> Self {
+        match color {
+            TrafficLightColor::Red => Red {}.into(),
+            TrafficLightColor::Yellow => Yellow {}.into(),
+            TrafficLightColor::Green => Green {}.into(),
+        }
+    }
 }
 
 #[test]
@@ -165,7 +205,6 @@ fn test() {
         "Color should be yellow"
     );
 
-    // Run test with --nocapture to see the output
     _ = traffic_light
         .handle_event(TimeoutEvent {}) // Red
         .tap(|x| {
@@ -183,11 +222,25 @@ fn test() {
                 "Color should be green"
             );
         })
-        .handle_event(EmergencyEvent {});
-
-    assert_eq!(
-        traffic_light.state().color(),
-        TrafficLightColor::Red,
-        "Color should have changed from green to red, because of EmergencyEvent"
-    );
+        .handle_event(ChaosEvent {}) // Color can Yellow or Red, since we're in Green
+        .handle_event(EmergencyEvent {
+            requested_color: TrafficLightColor::Red,
+        })
+        .tap(|x| {
+            assert_eq!(
+                x.state().color(),
+                TrafficLightColor::Red,
+                "Color should be red"
+            );
+        })
+        .handle_event(EmergencyEvent {
+            requested_color: TrafficLightColor::Yellow,
+        })
+        .tap(|x| {
+            assert_eq!(
+                x.state().color(),
+                TrafficLightColor::Yellow,
+                "Color should be yellow"
+            );
+        });
 }
