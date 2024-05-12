@@ -80,7 +80,11 @@ state_machine!(
                 TimeoutEvent -> Green {
                     println!("{:?}: Changing to Green", Instant::now());
                     Green {}
-                }
+                },
+                EmergencyEvent -> Red {
+                    println!("{:?}: Alredy red. No state change needed", Instant::now());
+                    state
+                },
             },
             Yellow {
                 // No transition block is provided, so the target state needs to implement Default
@@ -92,10 +96,11 @@ state_machine!(
                 EmergencyEvent -> Red
             }
         ],
-        unhanded_event: {
-            println!("{:?}: Unhandled event: {:?}", Instant::now(), event);
-            state
-        }
+        // We could also define an unhandled_event block, which would be called when an event is not handled by the state
+        // unhandled_event: {
+        //     println!("{:?}: Unhandled event: {:?}", Instant::now(), event);
+        //     state
+        // }
     }
 );
 
