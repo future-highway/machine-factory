@@ -151,21 +151,33 @@ impl Parse for StateTransitions {
 
 struct Transition {
     event_path: Path,
-    target_state_path: Path,
-    block: Option<Block>,
+    block: TransitionBlock,
+}
+
+enum TransitionBlock {
+    Default(Path),
+    Block(Block),
 }
 
 impl Parse for Transition {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let event = input.parse()?;
-        let _: Token![->] = input.parse()?;
-        let target = input.parse()?;
-        let transition = input.peek(Brace).then(|| input.parse()).transpose()?;
+
+        let block = if input.peek(Token![->]) {
+            let _: Token![->] = input.parse()?;
+            let target = input.parse()?;
+            TransitionBlock::Default(target)
+        } else if input.peek(Brace) {
+            let block = input.parse()?;
+            TransitionBlock::Block(block)
+        } else {
+            return Err(syn::Error::new(input.span(), "expected -> or {"));
+        };
+
 
         Ok(Self {
             event_path: event,
-            target_state_path: target,
-            block: transition,
+            block,
         })
     }
 }
@@ -175,8 +187,6 @@ struct StateEvent {
     state_ident: Ident,
     event_path: Path,
     event_ident: Ident,
-    target_state_path: Path,
-    target_state_ident: Ident,
     block: Block,
 }
 
@@ -204,28 +214,25 @@ pub(super) fn state_machine(input: TokenStream) -> TokenStream {
             return Err(syn::Error::new(state_path.span(), "state path is empty"));
         };
 
-        transitions.into_iter().map(|Transition { event_path, target_state_path, block }| {
+        transitions.into_iter().map(|Transition { event_path, block }| {
             let Some(event_ident) = event_path.segments.last().map(|s| s.ident.clone()) else {
                 return Err(syn::Error::new(event_path.span(), "event path is empty"));
             };
 
-            let Some(target_state_ident) = target_state_path.segments.last().map(|s| s.ident.clone()) else {
-                return Err(syn::Error::new(target_state_path.span(), "target state path is empty"));
+            let block = match block {
+                TransitionBlock::Block(block) => block,
+                TransitionBlock::Default(target) => {
+                    syn::parse_quote! {{
+                        #target::default()
+                    }}
+                }
             };
-
-            let block = block.unwrap_or_else(|| {
-                syn::parse_quote! {{
-                    #target_state_path::default()
-                }}
-            });
 
             Ok(StateEvent {
                 state_ident: state_ident.clone(),
                 state_path: state_path.clone(),
                 event_path,
                 event_ident,
-                target_state_path,
-                target_state_ident,
                 block,
             })
         })
@@ -239,7 +246,7 @@ pub(super) fn state_machine(input: TokenStream) -> TokenStream {
     };
 
     let handle_event_match_arms = state_events.iter()
-        .map(|StateEvent { state_path, state_ident, event_path, event_ident, target_state_path, target_state_ident, block }| {
+        .map(|StateEvent { state_path, state_ident, event_path, event_ident, block }| {
             let function_ident = Ident::new(
                 &format!("handle__{}__{}", 
                     state_ident.to_string().to_snake_case(),
@@ -255,10 +262,10 @@ pub(super) fn state_machine(input: TokenStream) -> TokenStream {
                         mut state: #state_path,
                         mut event: #event_path,
                         context: &mut #context_path,
-                    ) -> #target_state_path {
+                    ) -> #state_enum_ident {
                         #state_trait_path::on_exit(&mut state, context);
                         #event_trait_path::pre_transition(&mut event, context);
-                        let mut state: #target_state_path = #block;
+                        let mut state: #state_enum_ident = #block.into();
                         #event_trait_path::post_transition(&mut event, context);
                         #state_trait_path::on_enter(&mut state, context);
                         state
@@ -266,7 +273,7 @@ pub(super) fn state_machine(input: TokenStream) -> TokenStream {
                     
                     let context = &mut self.context;
                     let state = #function_ident(state, event, &mut self.context);
-                    #state_enum_ident::#target_state_ident(state)
+                    state
                 }
             }
         })
@@ -482,7 +489,7 @@ pub(super) fn state_machine(input: TokenStream) -> TokenStream {
             pub fn handle_event<Event: Into<#event_enum_ident> + #event_trait_path>(&mut self, event: Event) -> &mut Self {
                 let state = self.state.take().expect("state is missing");
                 
-                let state = match (state, event.into()) {
+                let state: #state_enum_ident = match (state, event.into()) {
                     #(#handle_event_match_arms)*
                     #unhandled_event
                 };
