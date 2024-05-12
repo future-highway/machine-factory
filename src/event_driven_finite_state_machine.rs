@@ -191,7 +191,7 @@ struct StateEvent {
 }
 
 #[allow(clippy::too_many_lines)]
-pub(super) fn state_machine(input: TokenStream) -> TokenStream {
+pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStream {
     let Machine {
         visibility,
         name,
