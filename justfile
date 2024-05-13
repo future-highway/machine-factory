@@ -3,12 +3,18 @@ default: lint build
 # Lint + Build + Test
 all: lint build test
 # Shadows CI checks as closely as possible
-ci: lint-strict build-release test udeps deny
+ci: lint-strict build-release test udeps deny lint-examples-strict build-examples-release
 
 ###
 
 build:
     cargo build
+
+build-examples:
+    cargo build --examples
+
+build-examples-release:
+    cargo build --examples --release
 
 build-release:
     cargo build --release
@@ -30,6 +36,12 @@ example file:
 
 lint:
     cargo clippy
+
+lint-examples:
+    cargo clippy --examples
+
+lint-examples-strict:
+    cargo clippy --examples -- -D warnings
 
 lint-strict:
     cargo clippy -- -D warnings
