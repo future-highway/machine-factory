@@ -1,9 +1,6 @@
 #![allow(clippy::print_stdout)]
-#![allow(clippy::tests_outside_test_module)]
 #![allow(clippy::use_debug)]
 #![allow(clippy::missing_trait_methods)]
-#![allow(clippy::single_match_else)]
-#![allow(clippy::wildcard_enum_match_arm)]
 #![allow(missing_docs)]
 
 use machine_factory::event_driven_finite_state_machine;
@@ -139,22 +136,18 @@ event_driven_finite_state_machine!(
             Green {
                 TimeoutEvent -> Yellow,
                 ChaosEvent -> Red,
-            }
-        ],
-        // We can also define an unhandled_event block, which would be called when an event is not handled by the state
-        unhandled_event: {
-            match event {
-                TrafficLightMachineEvent::EmergencyEvent(EmergencyEvent { requested_color }) => {
+            },
+            // We can also define an unhandled_event block, which would be called when an event is not handled by the state
+            _ {
+                if let TrafficLightMachineEvent::EmergencyEvent(EmergencyEvent { requested_color }) = event {
                     println!("{:?}: Emergency event not handled. Requested color: {:?}", Instant::now(), requested_color);
                     TrafficLightMachineState::from(requested_color)
-                }
-                _ => {
-                    // Here, we've decided that all other unhanded events are the same as changing to the current state.
+                } else {
                     println!("{:?}: Unhandled event: {:?}", Instant::now(), event);
                     state
                 }
             }
-        }
+        ],
     }
 );
 
