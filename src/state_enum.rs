@@ -8,7 +8,9 @@ pub struct StateEnumInput {
     pub state_paths: Vec<Path>,
 }
 
-pub fn state_enum(input: StateEnumInput) -> syn::Result<proc_macro2::TokenStream> {
+pub fn state_enum(
+    input: StateEnumInput,
+) -> syn::Result<proc_macro2::TokenStream> {
     let StateEnumInput {
         attributes,
         visibility,

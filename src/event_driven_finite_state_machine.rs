@@ -1,5 +1,8 @@
 use crate::{
-    event_enum::{event_enum, EventEnumInput}, event_trait::ensure_event_trait, state_enum::{state_enum, StateEnumInput}, state_trait::ensure_state_trait
+    event_enum::{event_enum, EventEnumInput},
+    event_trait::ensure_event_trait,
+    state_enum::{state_enum, StateEnumInput},
+    state_trait::ensure_state_trait,
 };
 use core::iter::once;
 use heck::ToSnakeCase;
@@ -13,7 +16,8 @@ use syn::{
     punctuated::Punctuated,
     spanned::Spanned,
     token::{Brace, Comma},
-    Attribute, Block, FnArg, Ident, Path, Token, TraitItem, Visibility,
+    Attribute, Block, FnArg, Ident, Path, Token, TraitItem,
+    Visibility,
 };
 
 struct Machine {
@@ -30,8 +34,12 @@ struct Machine {
 }
 
 impl Parse for Machine {
+    #[allow(clippy::too_many_lines)]
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
-        let visibility = input.peek(Token![pub]).then(|| input.parse()).transpose()?;
+        let visibility = input
+            .peek(Token![pub])
+            .then(|| input.parse())
+            .transpose()?;
         let name: Ident = input.parse()?;
 
         let content;
@@ -52,35 +60,75 @@ impl Parse for Machine {
 
             match label.to_string().as_str() {
                 "context" => {
-                    drop(context_path.replace(content.parse()?));
+                    drop(
+                        context_path
+                            .replace(content.parse()?),
+                    );
                 }
                 "state_enum" => {
                     if content.peek(Token![#]) {
-                        drop(state_enum_attrs.replace(Attribute::parse_outer(&content)?));
+                        drop(state_enum_attrs.replace(
+                            Attribute::parse_outer(
+                                &content,
+                            )?,
+                        ));
                     }
 
-                    drop(state_enum_ident.replace(content.parse()?));
+                    drop(
+                        state_enum_ident
+                            .replace(content.parse()?),
+                    );
                 }
                 "state_trait" => {
-                    drop(state_trait.replace(content.parse()?));
+                    drop(
+                        state_trait
+                            .replace(content.parse()?),
+                    );
                 }
                 "event_enum" => {
                     if content.peek(Token![#]) {
-                        drop(event_enum_attrs.replace(Attribute::parse_outer(&content)?));
+                        drop(event_enum_attrs.replace(
+                            Attribute::parse_outer(
+                                &content,
+                            )?,
+                        ));
                     }
-                    drop(event_enum_ident.replace(content.parse()?));
+                    drop(
+                        event_enum_ident
+                            .replace(content.parse()?),
+                    );
                 }
                 "event_trait" => {
-                    drop(event_trait_path.replace(content.parse()?));
+                    drop(
+                        event_trait_path
+                            .replace(content.parse()?),
+                    );
                 }
                 "transitions" => {
                     let content2;
                     let _ = bracketed!(content2 in content);
-                    let parsed_transitions = Punctuated::<StateTransitions, Comma>::parse_terminated(&content2)?;
-                    let parsed_transitions = parsed_transitions.into_iter().collect();
-                    drop(transitions.replace(parsed_transitions));
+                    let parsed_transitions =
+                        Punctuated::<
+                            StateTransitions,
+                            Comma,
+                        >::parse_terminated(
+                            &content2
+                        )?;
+                    let parsed_transitions =
+                        parsed_transitions
+                            .into_iter()
+                            .collect();
+                    drop(
+                        transitions
+                            .replace(parsed_transitions),
+                    );
                 }
-                _ => return Err(syn::Error::new(label.span(), "unrecognized label")),
+                _ => {
+                    return Err(syn::Error::new(
+                        label.span(),
+                        "unrecognized label",
+                    ));
+                }
             }
 
             if content.peek(Comma) {
@@ -89,31 +137,61 @@ impl Parse for Machine {
         }
 
         let context_path =
-            context_path.ok_or_else(|| syn::Error::new(name.span(), "machine is missing context"))?;
+            context_path.ok_or_else(|| {
+                syn::Error::new(
+                    name.span(),
+                    "machine is missing context",
+                )
+            })?;
 
         let state_enum_ident = state_enum_ident
-            .ok_or_else(|| syn::Error::new(name.span(), "machine is missing state_enum"))?;
+            .ok_or_else(|| {
+                syn::Error::new(
+                    name.span(),
+                    "machine is missing state_enum",
+                )
+            })?;
 
-        let state_trait = state_trait
-            .ok_or_else(|| syn::Error::new(name.span(), "machine is missing state_trait"))?;
+        let state_trait = state_trait.ok_or_else(|| {
+            syn::Error::new(
+                name.span(),
+                "machine is missing state_trait",
+            )
+        })?;
 
         let event_enum_ident = event_enum_ident
-            .ok_or_else(|| syn::Error::new(name.span(), "machine is missing event_enum"))?;
-        
-        let event_trait = event_trait_path
-            .ok_or_else(|| syn::Error::new(name.span(), "machine is missing event_trait"))?;
+            .ok_or_else(|| {
+                syn::Error::new(
+                    name.span(),
+                    "machine is missing event_enum",
+                )
+            })?;
 
-        let transitions =
-            transitions.ok_or_else(|| syn::Error::new(name.span(), "machine is missing transitions"))?;
+        let event_trait =
+            event_trait_path.ok_or_else(|| {
+                syn::Error::new(
+                    name.span(),
+                    "machine is missing event_trait",
+                )
+            })?;
+
+        let transitions = transitions.ok_or_else(|| {
+            syn::Error::new(
+                name.span(),
+                "machine is missing transitions",
+            )
+        })?;
 
         Ok(Self {
             visibility,
             name,
             context_path,
-            state_enum_attrs: state_enum_attrs.unwrap_or_default(),
+            state_enum_attrs: state_enum_attrs
+                .unwrap_or_default(),
             state_enum_ident,
             state_trait,
-            event_enum_attrs: event_enum_attrs.unwrap_or_default(),
+            event_enum_attrs: event_enum_attrs
+                .unwrap_or_default(),
             event_enum_ident,
             event_trait,
             transitions,
@@ -139,13 +217,22 @@ impl Parse for StateTransitions {
             Ok(Self::Default(block))
         } else {
             let state_path = input.parse()?;
-    
+
             let content;
             _ = braced!(content in input);
-            let transitions = Punctuated::<Transition, Comma>::parse_terminated(&content)?;
-            let transitions = transitions.into_iter().collect();
-    
-            Ok(Self::State(StateStateTransitions { state_path, transitions }))
+            let transitions = Punctuated::<
+                Transition,
+                Comma,
+            >::parse_terminated(
+                &content
+            )?;
+            let transitions =
+                transitions.into_iter().collect();
+
+            Ok(Self::State(StateStateTransitions {
+                state_path,
+                transitions,
+            }))
         }
     }
 }
@@ -172,14 +259,13 @@ impl Parse for Transition {
             let block = input.parse()?;
             TransitionBlock::Block(block)
         } else {
-            return Err(syn::Error::new(input.span(), "expected -> or {"));
+            return Err(syn::Error::new(
+                input.span(),
+                "expected -> or {",
+            ));
         };
 
-
-        Ok(Self {
-            event_path: event,
-            block,
-        })
+        Ok(Self { event_path: event, block })
     }
 }
 
@@ -192,7 +278,9 @@ struct StateEvent {
 }
 
 #[allow(clippy::too_many_lines)]
-pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStream {
+pub(super) fn event_driven_finite_state_machine(
+    input: TokenStream,
+) -> TokenStream {
     let Machine {
         visibility,
         name,
@@ -206,42 +294,61 @@ pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStre
         transitions,
     } = parse_macro_input!(input as Machine);
 
-    if let Err(e) = ensure_state_trait(&mut state_trait, &context_path, &event_enum_ident) {
+    if let Err(e) = ensure_state_trait(
+        &mut state_trait,
+        &context_path,
+        &event_enum_ident,
+    ) {
         return e.to_compile_error().into();
     }
 
-    let state_trait_path= &state_trait.ident;
+    let state_trait_path = &state_trait.ident;
 
-    if let Err(e) = ensure_event_trait(&mut event_trait, &context_path) {
+    if let Err(e) =
+        ensure_event_trait(&mut event_trait, &context_path)
+    {
         return e.to_compile_error().into();
     }
 
     let event_trait_path = &event_trait.ident;
 
     let unhandled_event = {
-        let mut unhandled_event = transitions.iter().filter_map(|transition| {
-            if let StateTransitions::Default(block) = transition {
-                Some(block)
-            } else {
-                None
-            }
-        }).collect::<Vec<_>>();
+        let mut unhandled_event = transitions
+            .iter()
+            .filter_map(|transition| {
+                if let StateTransitions::Default(block) =
+                    transition
+                {
+                    Some(block)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
 
         if unhandled_event.len() > 1 {
-            let extra = unhandled_event.get(1).expect("length check done above");
-            return syn::Error::new(extra.span(), "multiple unhandled_event blocks").to_compile_error().into();
+            let extra = unhandled_event
+                .get(1)
+                .expect("length check done above");
+            return syn::Error::new(
+                extra.span(),
+                "multiple unhandled_event blocks",
+            )
+            .to_compile_error()
+            .into();
         }
 
         unhandled_event.pop().cloned()
     };
 
-    let transitions = transitions.into_iter().filter_map(|transition| {
-        if let StateTransitions::State(x) = transition {
-            Some(x)
-        } else {
-            None            
-        }
-    });
+    let transitions =
+        transitions.into_iter().filter_map(|transition| {
+            if let StateTransitions::State(x) = transition {
+                Some(x)
+            } else {
+                None
+            }
+        });
 
     let state_events = transitions.into_iter().map(|StateStateTransitions { state_path, transitions }| {
         let Some(state_ident) = state_path.segments.last().map(|s| s.ident.clone()) else {
@@ -275,7 +382,9 @@ pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStre
     .collect::<syn::Result<Vec<_>>>();
 
     let state_events = match state_events {
-        Ok(x) => x.into_iter().flatten().collect::<Vec<_>>(),
+        Ok(x) => {
+            x.into_iter().flatten().collect::<Vec<_>>()
+        }
         Err(e) => return e.to_compile_error().into(),
     };
 
@@ -304,15 +413,24 @@ pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStre
         })
         .collect::<Vec<_>>();
 
-    let event_enum_trait_variants = state_events.iter()
-        .map(|StateEvent { event_path, .. }| event_path.clone())
+    let event_enum_trait_variants = state_events
+        .iter()
+        .map(|StateEvent { event_path, .. }| {
+            event_path.clone()
+        })
         .collect::<HashSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
 
-    let event_path_ident =state_events
+    let event_path_ident = state_events
         .iter()
-        .map(|StateEvent { event_path, event_ident, .. }| (event_path.clone(), event_ident.clone()))
+        .map(
+            |StateEvent {
+                 event_path, event_ident, ..
+             }| {
+                (event_path.clone(), event_ident.clone())
+            },
+        )
         .collect::<HashMap<_, _>>();
 
     let event_from_impls = event_path_ident
@@ -368,26 +486,36 @@ pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStre
     })
     .collect::<syn::Result<Vec<_>>>();
 
-    let event_enum_trait_functions = match event_enum_trait_functions {
-        Ok(x) => x,
-        Err(e) => return e.to_compile_error().into(),
-    };
+    let event_enum_trait_functions =
+        match event_enum_trait_functions {
+            Ok(x) => x,
+            Err(e) => return e.to_compile_error().into(),
+        };
 
-     let event_enum_trait_impl = quote! {
+    let event_enum_trait_impl = quote! {
         impl #event_trait_path for #event_enum_ident {
             #(#event_enum_trait_functions)*
         }
     };
 
-    let state_enum_trait_variants = state_events.iter()
-        .map(|StateEvent { state_path, .. }| state_path.clone())
+    let state_enum_trait_variants = state_events
+        .iter()
+        .map(|StateEvent { state_path, .. }| {
+            state_path.clone()
+        })
         .collect::<HashSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
 
     let state_path_ident = state_events
         .iter()
-        .map(|StateEvent { state_path, state_ident, .. }| (state_path.clone(), state_ident.clone()))
+        .map(
+            |StateEvent {
+                 state_path, state_ident, ..
+             }| {
+                (state_path.clone(), state_ident.clone())
+            },
+        )
         .collect::<HashMap<_, _>>();
 
     let state_from_impls = state_path_ident
@@ -443,10 +571,11 @@ pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStre
     })
     .collect::<syn::Result<Vec<_>>>();
 
-    let state_enum_trait_functions = match state_enum_trait_functions {
-        Ok(x) => x,
-        Err(e) => return e.to_compile_error().into(),
-    };
+    let state_enum_trait_functions =
+        match state_enum_trait_functions {
+            Ok(x) => x,
+            Err(e) => return e.to_compile_error().into(),
+        };
 
     let state_enum_trait_impl = quote! {
         impl #state_trait_path for #state_enum_ident {
@@ -520,7 +649,7 @@ pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStre
 
                 #state_trait_path::on_exit(&mut state, &mut self.context);
                 #event_trait_path::pre_transition(&mut event, &mut self.context);
-                
+
                 let mut state: #state_enum_ident = match (state, &mut event) {
                     #(#handle_event_match_arms)*
                     #unhandled_event
@@ -537,4 +666,3 @@ pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStre
 
     expanded.into()
 }
-

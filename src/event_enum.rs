@@ -8,7 +8,9 @@ pub struct EventEnumInput {
     pub event_paths: Vec<Path>,
 }
 
-pub fn event_enum(input: EventEnumInput) -> syn::Result<proc_macro2::TokenStream> {
+pub fn event_enum(
+    input: EventEnumInput,
+) -> syn::Result<proc_macro2::TokenStream> {
     let EventEnumInput {
         attributes,
         visibility,
