@@ -76,7 +76,7 @@ event_driven_finite_state_machine!(Camera {
 
 impl Default for Camera {
     fn default() -> Self {
-        Self::init(
+        Self::new(
             Standby {},
             Storage { total_recorded_seconds: 0 },
         )

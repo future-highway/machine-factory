@@ -626,7 +626,7 @@ pub(super) fn event_driven_finite_state_machine(
         }
 
         impl #name {
-            pub fn init<State: Into<#state_enum_ident> + #state_trait_path>(state: State, context: #context_path) -> Self {
+            pub fn new<State: Into<#state_enum_ident> + #state_trait_path>(state: State, context: #context_path) -> Self {
                 Self { context, state: ::std::option::Option::Some(state.into()) }
             }
 
