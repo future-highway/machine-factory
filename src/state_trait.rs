@@ -1,24 +1,25 @@
-use proc_macro::TokenStream;
-use quote::ToTokens;
-use syn::parse_macro_input;
 use syn::FnArg;
 use syn::ItemTrait;
 use syn::Path;
 use syn::TraitItem;
 use syn::Type;
 
-pub fn state_trait(attr: TokenStream, trait_: TokenStream) -> TokenStream {
-    let context_path = parse_macro_input!(attr as Path);
-    let mut trait_ = parse_macro_input!(trait_ as syn::ItemTrait);
-    ensure_on_enter_fn(&context_path, &mut trait_).expect("`on_enter` function error");
-    ensure_on_exit_fn(&context_path, &mut trait_).expect("`on_exit` function error");
-    trait_.to_token_stream().into()
+// NOTE: Haven't refactored out the fn check becuase the decision on the fn signature is still not firm.
+
+pub fn ensure_state_trait(
+    trait_: &mut ItemTrait,
+    context_path: &Path,
+    event_enum_iden: &Ident,
+) -> syn::Result<()> {
+    ensure_on_enter_fn(trait_, context_path)?;
+    ensure_on_exit_fn(trait_, context_path)?;
+    Ok(())
 }
 
 /// We want the `on_enter` function to be mandatory.
 /// If it is not present, we add.
 /// If it is present but has a different signature, we return an error.
-fn ensure_on_enter_fn(context_path: &Path, trait_: &mut ItemTrait) -> syn::Result<()> {
+fn ensure_on_enter_fn(trait_: &mut ItemTrait, context_path: &Path) -> syn::Result<()> {
     #[allow(clippy::wildcard_enum_match_arm)]
     let func = trait_.items.iter().find_map(|item| match item {
         TraitItem::Fn(f) if f.sig.ident == "on_enter" => Some(f),
@@ -64,6 +65,13 @@ fn ensure_on_enter_fn(context_path: &Path, trait_: &mut ItemTrait) -> syn::Resul
         if !matches!(second_input_ty, Type::Path(p) if p.path.eq(context_path)) {
             return Err(syn::Error::new_spanned(second_input, SECOND_ARG_ERROR));
         }
+
+        if inputs.next().is_some() {
+            return Err(syn::Error::new_spanned(
+                func,
+                "must not have more than two arguments",
+            ));
+        }
     } else {
         let on_enter = syn::parse_quote! {
             fn on_enter(&mut self, context: &mut #context_path) {}
@@ -75,7 +83,7 @@ fn ensure_on_enter_fn(context_path: &Path, trait_: &mut ItemTrait) -> syn::Resul
     Ok(())
 }
 
-fn ensure_on_exit_fn(context_path: &Path, trait_: &mut ItemTrait) -> syn::Result<()> {
+fn ensure_on_exit_fn(trait_: &mut ItemTrait, context_path: &Path) -> syn::Result<()> {
     #[allow(clippy::wildcard_enum_match_arm)]
     let func = trait_.items.iter().find_map(|item| match item {
         TraitItem::Fn(f) if f.sig.ident == "on_exit" => Some(f),
@@ -83,7 +91,7 @@ fn ensure_on_exit_fn(context_path: &Path, trait_: &mut ItemTrait) -> syn::Result
     });
 
     if let Some(func) = func {
-        const FIRST_ARG_ERROR: &str = "must accept `self` as the first argument";
+        const FIRST_ARG_ERROR: &str = "must accept `&mut self` as the first argument";
         const SECOND_ARG_ERROR: &str = "must accept `&mut {Context}` as the second argument";
 
         let mut inputs = func.sig.inputs.iter();
@@ -121,6 +129,13 @@ fn ensure_on_exit_fn(context_path: &Path, trait_: &mut ItemTrait) -> syn::Result
         if !matches!(second_input_ty, Type::Path(p) if p.path.eq(context_path)) {
             return Err(syn::Error::new_spanned(second_input, SECOND_ARG_ERROR));
         }
+
+        if inputs.next().is_some() {
+            return Err(syn::Error::new_spanned(
+                func,
+                "must not have more than two arguments",
+            ));
+        }
     } else {
         let on_exit = syn::parse_quote! {
             fn on_exit(&mut self, context: &mut #context_path) {}
@@ -131,3 +146,4 @@ fn ensure_on_exit_fn(context_path: &Path, trait_: &mut ItemTrait) -> syn::Result
 
     Ok(())
 }
+

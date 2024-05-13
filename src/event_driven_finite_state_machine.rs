@@ -1,6 +1,5 @@
 use crate::{
-    event_enum::{event_enum, EventEnumInput},
-    state_enum::{state_enum, StateEnumInput},
+    event_enum::{event_enum, EventEnumInput}, event_trait::ensure_event_trait, state_enum::{state_enum, StateEnumInput}, state_trait::ensure_state_trait
 };
 use core::iter::once;
 use heck::ToSnakeCase;
@@ -200,14 +199,23 @@ pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStre
         context_path,
         state_enum_attrs,
         state_enum_ident,
-        state_trait,
+        mut state_trait,
         event_enum_attrs,
         event_enum_ident,
-        event_trait,
+        mut event_trait,
         transitions,
     } = parse_macro_input!(input as Machine);
 
+    if let Err(e) = ensure_state_trait(&mut state_trait, &context_path, &event_enum_ident) {
+        return e.to_compile_error().into();
+    }
+
     let state_trait_path= &state_trait.ident;
+
+    if let Err(e) = ensure_event_trait(&mut event_trait, &context_path) {
+        return e.to_compile_error().into();
+    }
+
     let event_trait_path = &event_trait.ident;
 
     let unhandled_event = {
@@ -482,13 +490,11 @@ pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStre
     };
 
     let expanded = quote! {
-        #[::machine_factory::event_trait(#context_path)]
         #event_trait
         #event_enum
         #(#event_from_impls)*
         #event_enum_trait_impl
 
-        #[::machine_factory::state_trait(#context_path)]
         #state_trait
         #state_enum
         #(#state_from_impls)*
