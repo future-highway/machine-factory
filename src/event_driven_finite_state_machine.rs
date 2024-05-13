@@ -28,7 +28,6 @@ struct Machine {
     event_enum_ident: Ident,
     event_trait: syn::ItemTrait,
     transitions: Vec<StateTransitions>,
-    unhandled_event: Option<Block>,
 }
 
 impl Parse for Machine {
@@ -47,7 +46,6 @@ impl Parse for Machine {
         let mut event_enum_ident = None;
         let mut event_trait_path = None;
         let mut transitions = None;
-        let mut unhandled_event = None;
 
         while content.peek(Ident) {
             let label: Ident = content.parse()?;
@@ -82,9 +80,6 @@ impl Parse for Machine {
                     let parsed_transitions = Punctuated::<StateTransitions, Comma>::parse_terminated(&content2)?;
                     let parsed_transitions = parsed_transitions.into_iter().collect();
                     drop(transitions.replace(parsed_transitions));
-                }
-                "unhandled_event" => {
-                    drop(unhandled_event.replace(content.parse()?));
                 }
                 _ => return Err(syn::Error::new(label.span(), "unrecognized label")),
             }
@@ -123,29 +118,36 @@ impl Parse for Machine {
             event_enum_ident,
             event_trait,
             transitions,
-            unhandled_event,
         })
     }
 }
 
-struct StateTransitions {
+enum StateTransitions {
+    Default(Block),
+    State(StateStateTransitions),
+}
+
+struct StateStateTransitions {
     state_path: Path,
     transitions: Vec<Transition>,
 }
 
 impl Parse for StateTransitions {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
-        let state_path = input.parse()?;
-
-        let content;
-        _ = braced!(content in input);
-        let transitions = Punctuated::<Transition, Comma>::parse_terminated(&content)?;
-        let transitions = transitions.into_iter().collect();
-
-        Ok(Self {
-            state_path,
-            transitions,
-        })
+        if input.peek(Token![_]) {
+            let _: Token![_] = input.parse()?;
+            let block = input.parse()?;
+            Ok(Self::Default(block))
+        } else {
+            let state_path = input.parse()?;
+    
+            let content;
+            _ = braced!(content in input);
+            let transitions = Punctuated::<Transition, Comma>::parse_terminated(&content)?;
+            let transitions = transitions.into_iter().collect();
+    
+            Ok(Self::State(StateStateTransitions { state_path, transitions }))
+        }
     }
 }
 
@@ -203,13 +205,37 @@ pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStre
         event_enum_ident,
         event_trait,
         transitions,
-        unhandled_event,
     } = parse_macro_input!(input as Machine);
 
     let state_trait_path= &state_trait.ident;
     let event_trait_path = &event_trait.ident;
 
-    let state_events = transitions.into_iter().map(|StateTransitions { state_path, transitions }| {
+    let unhandled_event = {
+        let mut unhandled_event = transitions.iter().filter_map(|transition| {
+            if let StateTransitions::Default(block) = transition {
+                Some(block)
+            } else {
+                None
+            }
+        }).collect::<Vec<_>>();
+
+        if unhandled_event.len() > 1 {
+            let extra = unhandled_event.get(1).expect("length check done above");
+            return syn::Error::new(extra.span(), "multiple unhandled_event blocks").to_compile_error().into();
+        }
+
+        unhandled_event.pop().cloned()
+    };
+
+    let transitions = transitions.into_iter().filter_map(|transition| {
+        if let StateTransitions::State(x) = transition {
+            Some(x)
+        } else {
+            None            
+        }
+    });
+
+    let state_events = transitions.into_iter().map(|StateStateTransitions { state_path, transitions }| {
         let Some(state_ident) = state_path.segments.last().map(|s| s.ident.clone()) else {
             return Err(syn::Error::new(state_path.span(), "state path is empty"));
         };
