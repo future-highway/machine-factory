@@ -167,7 +167,7 @@ impl TrafficLight {
 
 impl Default for TrafficLight {
     fn default() -> Self {
-        Self::init(Red, TrafficLightContext::default())
+        Self::new(Red, TrafficLightContext::default())
     }
 }
 

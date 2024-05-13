@@ -104,8 +104,7 @@ fn main() {
     let mut state = Red {};
     state.on_enter(&mut context);
 
-    let mut traffic_light =
-        TrafficLight::init(Red, context);
+    let mut traffic_light = TrafficLight::new(Red, context);
 
     let mut count = 0_i32;
     while count < 10_i32 {
