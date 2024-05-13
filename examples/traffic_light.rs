@@ -141,7 +141,7 @@ event_driven_finite_state_machine!(
             _ {
                 if let TrafficLightMachineEvent::EmergencyEvent(EmergencyEvent { requested_color }) = event {
                     println!("{:?}: Emergency event not handled. Requested color: {:?}", Instant::now(), requested_color);
-                    TrafficLightMachineState::from(requested_color)
+                    TrafficLightMachineState::from(&*requested_color)
                 } else {
                     println!("{:?}: Unhandled event: {:?}", Instant::now(), event);
                     state
@@ -159,8 +159,8 @@ enum TrafficLightColor {
     Green,
 }
 
-impl From<TrafficLightColor> for TrafficLightMachineState {
-    fn from(color: TrafficLightColor) -> Self {
+impl From<&TrafficLightColor> for TrafficLightMachineState {
+    fn from(color: &TrafficLightColor) -> Self {
         match color {
             TrafficLightColor::Red => Red {}.into(),
             TrafficLightColor::Yellow => Yellow {}.into(),

@@ -294,20 +294,11 @@ pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStre
                     #[allow(non_snake_case)]
                     fn #function_ident(
                         mut state: #state_path,
-                        mut event: #event_path,
+                        event: &mut #event_path,
                         context: &mut #context_path,
-                    ) -> #state_enum_ident {
-                        #state_trait_path::on_exit(&mut state, context);
-                        #event_trait_path::pre_transition(&mut event, context);
-                        let mut state: #state_enum_ident = #block.into();
-                        #event_trait_path::post_transition(&mut event, context);
-                        #state_trait_path::on_enter(&mut state, context);
-                        state
-                    }
-                    
-                    let context = &mut self.context;
-                    let state = #function_ident(state, event, &mut self.context);
-                    state
+                    ) -> impl Into<#state_enum_ident> #block
+                
+                    #function_ident(state, event, &mut self.context).into()
                 }
             }
         })
@@ -519,12 +510,24 @@ pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStre
             }
 
             pub fn handle_event<Event: Into<#event_enum_ident> + #event_trait_path>(&mut self, event: Event) -> &mut Self {
-                let state = self.state.take().expect("state is missing");
+                let mut event = event.into();
+                let mut state = self.state.take().expect("state is missing");
+
+                if !#state_enum_ident::should_exit(&state, &self.context, &event) {
+                    self.state.replace(state);
+                    return self;
+                }
+
+                #state_enum_ident::on_exit(&mut state, &mut self.context);
+                #event_enum_ident::pre_transition(&mut event, &mut self.context);
                 
-                let state: #state_enum_ident = match (state, event.into()) {
+                let mut state: #state_enum_ident = match (state, &mut event) {
                     #(#handle_event_match_arms)*
                     #unhandled_event
                 };
+
+                #event_enum_ident::post_transition(&mut event, &mut self.context);
+                #state_enum_ident::on_enter(&mut state, &mut self.context);
 
                 _ = self.state.replace(state);
                 self
@@ -534,3 +537,4 @@ pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStre
 
     expanded.into()
 }
+
