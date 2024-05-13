@@ -239,7 +239,7 @@ fn ensure_should_exit_fn(
         }
     } else {
         let on_exit = syn::parse_quote! {
-            fn should_exit(&self, context: &#context_path, event: &#event_enum_ident) -> bool {
+            fn should_exit(&self, _context: &#context_path, _event: &#event_enum_ident) -> bool {
                 true
             }
         };

@@ -8,11 +8,16 @@ publish = false
 proc-macro = true
 
 [[example]]
+name = "camera"
+
+[[example]]
 name = "traffic_light"
+
+[[example]]
+name = "traffic_light_with_camera"
 
 [dependencies]
 heck = "0.5"
-paste = "1"
 proc-macro2 = "1"
 quote = "1"
 syn = { version = "2", features = ["extra-traits", "full"] }
@@ -55,14 +60,15 @@ perf = { level = "warn", priority = -1 }
 restriction = { level = "warn", priority = -1 }
 style = { level = "warn", priority = -1 }
 suspicious = { level = "warn", priority = -1 }
-# end groupsms
-blanket_clippy_restriction_lints = "allow" # this doesn't seem to work (CLI arg does)
+# end groups
+blanket_clippy_restriction_lints = "allow" # this doesn't seem to work in all cases (CLI arg is also needed)
 exhaustive_enums = "allow"
 exhaustive_structs = "allow"
 expect_used = "allow"
 implicit_return = "allow"
 min_ident_chars = "allow"
 missing_docs_in_private_items = "allow"
+mod_module_files = "allow"
 module_name_repetitions = "allow"
 pattern_type_mismatch = "allow"
 pub_use = "allow"

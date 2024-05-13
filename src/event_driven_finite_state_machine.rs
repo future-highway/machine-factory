@@ -396,7 +396,7 @@ pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStre
             quote! {
                 impl From<#state_path> for #state_enum_ident {
                     fn from(state: #state_path) -> Self {
-                        #state_enum_ident::#state_ident(state)
+                        Self::#state_ident(state)
                     }
                 }
             }
@@ -505,7 +505,7 @@ pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStre
                 &self.context
             }
 
-            pub fn state(&self) -> &dyn #state_trait_path {
+            pub fn state(&self) -> &#state_enum_ident {
                 self.state.as_ref().expect("state is missing")
             }
 
@@ -518,16 +518,16 @@ pub(super) fn event_driven_finite_state_machine(input: TokenStream) -> TokenStre
                     return self;
                 }
 
-                #state_enum_ident::on_exit(&mut state, &mut self.context);
-                #event_enum_ident::pre_transition(&mut event, &mut self.context);
+                #state_trait_path::on_exit(&mut state, &mut self.context);
+                #event_trait_path::pre_transition(&mut event, &mut self.context);
                 
                 let mut state: #state_enum_ident = match (state, &mut event) {
                     #(#handle_event_match_arms)*
                     #unhandled_event
                 };
 
-                #event_enum_ident::post_transition(&mut event, &mut self.context);
-                #state_enum_ident::on_enter(&mut state, &mut self.context);
+                #event_trait_path::post_transition(&mut event, &mut self.context);
+                #state_trait_path::on_enter(&mut state, &mut self.context);
 
                 _ = self.state.replace(state);
                 self
