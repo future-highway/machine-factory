@@ -1,6 +1,9 @@
+# Lint + Build
 default: lint build
+# Lint + Build + Test
 all: lint build test
-ci: lint-strict build-release test
+# Shadows CI checks as closely as possible
+ci: lint-strict build-release test udeps deny
 
 ###
 
@@ -12,6 +15,9 @@ build-release:
 
 clean:
     cargo clean
+
+deny:
+    cargo deny check
 
 docs:
     cargo doc
