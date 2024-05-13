@@ -1,6 +1,3 @@
-use proc_macro::TokenStream;
-use quote::ToTokens;
-use syn::parse_macro_input;
 use syn::FnArg;
 use syn::ItemTrait;
 use syn::Path;
@@ -8,16 +5,13 @@ use syn::TraitItem;
 use syn::TraitItemFn;
 use syn::Type;
 
-pub fn event_trait(attr: TokenStream, trait_: TokenStream) -> TokenStream {
-    let context_path = parse_macro_input!(attr as Path);
-    let mut trait_ = parse_macro_input!(trait_ as syn::ItemTrait);
-    ensure_pre_transition_fn(&context_path, &mut trait_).expect("`pre_transition` function error");
-    ensure_post_transition_fn(&context_path, &mut trait_)
-        .expect("`post_transition` function error");
-    trait_.to_token_stream().into()
+pub fn ensure_event_trait(trait_: &mut ItemTrait, context_path: &Path) -> syn::Result<()> {
+    ensure_pre_transition_fn(trait_, context_path)?;
+    ensure_post_transition_fn(trait_, context_path)?;
+    Ok(())
 }
 
-fn ensure_pre_transition_fn(context_path: &Path, trait_: &mut ItemTrait) -> syn::Result<()> {
+fn ensure_pre_transition_fn(trait_: &mut ItemTrait, context_path: &Path) -> syn::Result<()> {
     #[allow(clippy::wildcard_enum_match_arm)]
     let func = trait_.items.iter().find_map(|item| match item {
         TraitItem::Fn(f) if f.sig.ident == "pre_transition" => Some(f),
@@ -25,7 +19,7 @@ fn ensure_pre_transition_fn(context_path: &Path, trait_: &mut ItemTrait) -> syn:
     });
 
     if let Some(func) = func {
-        check_transition_fn(context_path, func)?;
+        check_transition_fn(func, context_path)?;
     } else {
         let pre_transition = syn::parse_quote! {
             fn pre_transition(&mut self, context: &mut #context_path) {}
@@ -37,7 +31,7 @@ fn ensure_pre_transition_fn(context_path: &Path, trait_: &mut ItemTrait) -> syn:
     Ok(())
 }
 
-fn ensure_post_transition_fn(context_path: &Path, trait_: &mut ItemTrait) -> syn::Result<()> {
+fn ensure_post_transition_fn(trait_: &mut ItemTrait, context_path: &Path) -> syn::Result<()> {
     #[allow(clippy::wildcard_enum_match_arm)]
     let func = trait_.items.iter().find_map(|item| match item {
         TraitItem::Fn(f) if f.sig.ident == "post_transition" => Some(f),
@@ -45,7 +39,7 @@ fn ensure_post_transition_fn(context_path: &Path, trait_: &mut ItemTrait) -> syn
     });
 
     if let Some(func) = func {
-        check_transition_fn(context_path, func)?;
+        check_transition_fn(func, context_path)?;
     } else {
         let post_transition = syn::parse_quote! {
             fn post_transition(&mut self, context: &mut #context_path) {}
@@ -57,7 +51,7 @@ fn ensure_post_transition_fn(context_path: &Path, trait_: &mut ItemTrait) -> syn
     Ok(())
 }
 
-fn check_transition_fn(context_path: &Path, func: &TraitItemFn) -> syn::Result<()> {
+fn check_transition_fn(func: &TraitItemFn, context_path: &Path) -> syn::Result<()> {
     const FIRST_ARG_ERROR: &str = "must accept `&mut self` as the first argument";
     const SECOND_ARG_ERROR: &str = "must accept `&mut {Context}` as the second argument";
 
@@ -95,6 +89,13 @@ fn check_transition_fn(context_path: &Path, func: &TraitItemFn) -> syn::Result<(
 
     if !matches!(second_input_ty, Type::Path(p) if p.path.eq(context_path)) {
         return Err(syn::Error::new_spanned(second_input, SECOND_ARG_ERROR));
+    }
+
+    if inputs.next().is_some() {
+        return Err(syn::Error::new_spanned(
+            func,
+            "must accept exactly two arguments",
+        ));
     }
 
     Ok(())
