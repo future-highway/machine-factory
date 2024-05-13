@@ -6,7 +6,8 @@
 use machine_factory::event_driven_finite_state_machine;
 use std::time::Instant;
 
-// First, we define the context that the traffic light will use
+// First, we define the context that the traffic light will
+// use
 #[derive(Default)]
 struct TrafficLightContext {
     #[allow(dead_code)] // seems like a false positive
@@ -17,7 +18,8 @@ struct TrafficLightContext {
 pub struct TimeoutEvent;
 
 impl TrafficLightEvent for TimeoutEvent {
-    // Here we can override the default implementation of the pre_transition and post_transition methods,
+    // Here we can override the default implementation of
+    // the pre_transition and post_transition methods,
     // as well as any other methods on the trait.
 }
 
@@ -36,14 +38,19 @@ impl TrafficLightEvent for ChaosEvent {}
 pub struct Red;
 
 impl TrafficLightState for Red {
-    // We can override the default implementation of the on_enter and on_exit methods,
-    // as well as any other methods on the trait.
-    fn on_enter(&mut self, context: &mut TrafficLightContext) {
+    // We can override the default implementation of the
+    // on_enter and on_exit methods, as well as any
+    // other methods on the trait.
+    fn on_enter(
+        &mut self,
+        context: &mut TrafficLightContext,
+    ) {
         context.last_change = Some(Instant::now());
         println!("{:?}: Changed to Red", Instant::now());
     }
 
-    // This is required, since we don't provide a default implementation in the trait
+    // This is required, since we don't provide a default
+    // implementation in the trait
     fn color(&self) -> TrafficLightColor {
         TrafficLightColor::Red
     }

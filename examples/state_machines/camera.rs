@@ -11,7 +11,11 @@ pub struct Storage {
 #[derive(Default)]
 struct Standby;
 impl CameraStateTrait for Standby {
-    fn should_exit(&self, _context: &Storage, event: &CameraEvent) -> bool {
+    fn should_exit(
+        &self,
+        _context: &Storage,
+        event: &CameraEvent,
+    ) -> bool {
         matches!(event, CameraEvent::StartRecording(_))
     }
 }
@@ -22,20 +26,25 @@ struct Recording {
 
 impl Default for Recording {
     fn default() -> Self {
-        Self {
-            started_recording_at: Instant::now(),
-        }
+        Self { started_recording_at: Instant::now() }
     }
 }
 
 impl CameraStateTrait for Recording {
     fn on_exit(&mut self, context: &mut Storage) {
-        context.total_recorded_seconds = context
-            .total_recorded_seconds
-            .saturating_add(self.started_recording_at.elapsed().as_secs());
+        context.total_recorded_seconds =
+            context.total_recorded_seconds.saturating_add(
+                self.started_recording_at
+                    .elapsed()
+                    .as_secs(),
+            );
     }
 
-    fn should_exit(&self, _context: &Storage, event: &CameraEvent) -> bool {
+    fn should_exit(
+        &self,
+        _context: &Storage,
+        event: &CameraEvent,
+    ) -> bool {
         matches!(event, CameraEvent::StopRecording(_))
     }
 }
@@ -69,9 +78,7 @@ impl Default for Camera {
     fn default() -> Self {
         Self::init(
             Standby {},
-            Storage {
-                total_recorded_seconds: 0,
-            },
+            Storage { total_recorded_seconds: 0 },
         )
     }
 }
