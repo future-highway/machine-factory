@@ -9,7 +9,7 @@ use std::time::Instant;
 // First, we define the context that the traffic light will
 // use
 #[derive(Default)]
-struct TrafficLightContext {
+pub struct TrafficLightContext {
     #[allow(dead_code)] // seems like a false positive
     last_change: Option<Instant>,
 }
@@ -80,7 +80,7 @@ event_driven_finite_state_machine!(
         context: TrafficLightContext,
         event_trait:  trait TrafficLightEvent {},
         event_enum: #[derive(Debug, Clone)] TrafficLightMachineEvent,
-        state_trait: trait TrafficLightState {
+        state_trait: pub trait TrafficLightState {
             fn on_enter(&mut self, context: &mut TrafficLightContext) {
                 context.last_change = Some(Instant::now());
             }

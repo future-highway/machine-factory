@@ -34,8 +34,10 @@ fn main() {
         camera.context().total_recorded_seconds
     );
 
+    let context = camera.into_context();
+
     println!(
         "Total recorded seconds: {}",
-        camera.context().total_recorded_seconds
+        context.total_recorded_seconds
     );
 }

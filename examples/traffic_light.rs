@@ -1,18 +1,20 @@
 #![allow(missing_docs)]
+#![allow(clippy::print_stdout)]
+#![allow(clippy::use_debug)]
 
-use crate::state_machines::traffic_light::TrafficLightColor;
-use state_machines::traffic_light::{
+use crate::state_machines::traffic_light::{
     ChaosEvent, EmergencyEvent, TimeoutEvent, TrafficLight,
-    TrafficLightMachineEvent,
+    TrafficLightColor, TrafficLightMachineEvent,
+    TrafficLightState,
 };
 use tap::Tap;
 
 mod state_machines;
 
 fn main() {
-    let traffic_light = TrafficLight::default();
+    let mut traffic_light = TrafficLight::default();
 
-    _ = traffic_light
+    _ = (&mut traffic_light)
         .tap(|x| {
             assert_eq!(
                 x.color(),
@@ -87,4 +89,7 @@ fn main() {
                 "Color should be yellow"
             );
         });
+
+    let state = traffic_light.into_state();
+    println!("Final state: {:?}", state.color());
 }
