@@ -8,15 +8,6 @@ license = "MIT OR Apache-2.0"
 [lib]
 proc-macro = true
 
-[[example]]
-name = "camera"
-
-[[example]]
-name = "traffic_light"
-
-[[example]]
-name = "traffic_light_with_camera"
-
 [dependencies]
 heck = "0.5"
 proc-macro2 = "1"
