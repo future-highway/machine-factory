@@ -24,7 +24,9 @@ quote = "1"
 syn = { version = "2", features = ["extra-traits", "full"] }
 
 [dev-dependencies]
+reqwest = "0.12"
 tap = "1"
+tokio = { version = "1", features = ["full"] }
 
 [lints.rust]
 # start groups
