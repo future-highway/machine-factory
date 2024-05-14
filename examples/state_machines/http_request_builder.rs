@@ -12,6 +12,7 @@
 use machine_factory::deterministic_state_machine;
 use reqwest::{header::HeaderMap, Method, Url};
 
+#[derive(Debug)]
 pub struct HttpRequestBuilderData {
     pub method: Option<Method>,
     pub url: Option<Url>,

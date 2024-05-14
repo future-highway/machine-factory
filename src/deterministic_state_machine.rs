@@ -364,6 +364,22 @@ pub fn deterministic_state_machine(
                 }
             }
 
+            pub fn context(&self) -> &#context {
+                &self.context
+            }
+
+            pub fn state(&self) -> &State {
+                &self.state
+            }
+
+            pub fn into_context(self) -> #context {
+                self.context
+            }
+
+            pub fn into_state(self) -> State {
+                self.state
+            }
+
             pub fn into_parts(self) -> (State, #context) {
                 (self.state, self.context)
             }

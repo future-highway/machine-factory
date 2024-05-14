@@ -638,6 +638,20 @@ pub(super) fn event_driven_finite_state_machine(
                 self.state.as_ref().expect("state is missing")
             }
 
+            pub fn into_context(self) -> #context_path {
+                self.context
+            }
+
+            pub fn into_state(self) -> #state_enum_ident {
+                self.state.expect("state is missing")
+            }
+
+            pub fn into_parts(self) -> (#state_enum_ident, #context_path) {
+                let Self { context, state } = self;
+                let state = state.expect("state is missing");
+                (state, context)
+            }
+
             pub fn handle_event<Event: Into<#event_enum_ident> + #event_trait_path>(&mut self, event: Event) -> &mut Self {
                 let mut event = event.into();
                 let mut state = self.state.take().expect("state is missing");
