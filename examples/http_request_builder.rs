@@ -13,7 +13,7 @@ mod state_machines;
 #[tokio::main]
 async fn main() {
     let request = HttpRequest::default();
-    let (state, _context) = request
+    let response = request
         .set_method(Method::GET)
         .set_url(
             Url::parse("https://example.com")
@@ -30,8 +30,10 @@ async fn main() {
         })
         .send()
         .await
-        .expect("Failed to send request")
-        .into_parts();
+        .expect("Failed to send request");
 
-    println!("Response status code: {}", state.status_code);
+    println!(
+        "Response status code: {}",
+        response.status_code
+    );
 }
