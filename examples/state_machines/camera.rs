@@ -4,11 +4,12 @@
 use machine_factory::event_driven_finite_state_machine;
 use std::time::Instant;
 
+#[derive(Debug)]
 pub struct Storage {
     pub total_recorded_seconds: u64,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Standby;
 impl CameraStateTrait for Standby {
     fn should_exit(
@@ -20,6 +21,7 @@ impl CameraStateTrait for Standby {
     }
 }
 
+#[derive(Debug)]
 struct Recording {
     started_recording_at: Instant,
 }
@@ -57,22 +59,25 @@ impl CameraEventTrait for StartRecording {}
 pub struct StopRecording;
 impl CameraEventTrait for StopRecording {}
 
-event_driven_finite_state_machine!(Camera {
-    context: Storage,
-    state_enum: CameraState,
-    state_trait: trait CameraStateTrait {},
-    event_enum: CameraEvent,
-    event_trait: #[allow(dead_code)]trait CameraEventTrait {},
-    transitions: [
-        Standby {
-            StartRecording -> Recording,
-        },
-        Recording {
-            StopRecording -> Standby,
-        },
-        _ { state }
-    ]
-});
+event_driven_finite_state_machine!(
+    #[derive(Debug)]
+    Camera {
+        context: Storage,
+        state_enum: #[derive(Debug)] CameraState,
+        state_trait: trait CameraStateTrait {},
+        event_enum: CameraEvent,
+        event_trait: trait CameraEventTrait {},
+        transitions: [
+            Standby {
+                StartRecording -> Recording,
+            },
+            Recording {
+                StopRecording -> Standby,
+            },
+            _ { state }
+        ]
+    }
+);
 
 impl Default for Camera {
     fn default() -> Self {

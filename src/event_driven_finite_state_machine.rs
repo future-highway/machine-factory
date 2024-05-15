@@ -21,6 +21,7 @@ use syn::{
 };
 
 struct Machine {
+    attributes: Vec<Attribute>,
     visibility: Option<Visibility>,
     name: Ident,
     context_path: Path,
@@ -36,6 +37,12 @@ struct Machine {
 impl Parse for Machine {
     #[allow(clippy::too_many_lines)]
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let attributes = input
+            .peek(Token![#])
+            .then(|| Attribute::parse_outer(input))
+            .transpose()?
+            .unwrap_or_default();
+
         let visibility = input
             .peek(Token![pub])
             .then(|| input.parse())
@@ -183,6 +190,7 @@ impl Parse for Machine {
         })?;
 
         Ok(Self {
+            attributes,
             visibility,
             name,
             context_path,
@@ -282,6 +290,7 @@ pub(super) fn event_driven_finite_state_machine(
     input: TokenStream,
 ) -> TokenStream {
     let Machine {
+        attributes,
         visibility,
         name,
         context_path,
@@ -601,7 +610,7 @@ pub(super) fn event_driven_finite_state_machine(
 
     let state_enum = match state_enum(StateEnumInput {
         attributes: state_enum_attrs,
-        visibility,
+        visibility: visibility.clone(),
         ident: state_enum_ident.clone(),
         state_paths: state_enum_trait_variants,
     }) {
@@ -620,7 +629,8 @@ pub(super) fn event_driven_finite_state_machine(
         #(#state_from_impls)*
         #state_enum_trait_impl
 
-        pub struct #name {
+        #(#attributes)*
+        #visibility struct #name {
             context: #context_path,
             state: ::std::option::Option<#state_enum_ident>,
         }
