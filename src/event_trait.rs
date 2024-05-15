@@ -1,6 +1,6 @@
 use syn::{
-    FnArg, ItemTrait, Path, Token, TraitItem, TraitItemFn,
-    Type,
+    FnArg, ItemTrait, Path, ReturnType, Token, TraitItem,
+    TraitItemFn, Type,
 };
 
 pub fn ensure_event_trait(
@@ -105,7 +105,9 @@ fn check_transition_fn(
         ));
     };
 
-    if first_input.mutability.is_none() {
+    if first_input.mutability.is_none()
+        || first_input.reference.is_none()
+    {
         return Err(syn::Error::new_spanned(
             first_input,
             FIRST_ARG_ERROR,
@@ -153,6 +155,13 @@ fn check_transition_fn(
         return Err(syn::Error::new_spanned(
             func,
             "must accept exactly two arguments",
+        ));
+    }
+
+    if !matches!(func.sig.output, ReturnType::Default) {
+        return Err(syn::Error::new_spanned(
+            func,
+            "must not have a return type",
         ));
     }
 
