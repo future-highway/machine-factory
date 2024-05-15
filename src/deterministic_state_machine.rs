@@ -6,10 +6,12 @@ use syn::{
     parse_macro_input,
     punctuated::Punctuated,
     token::Comma,
-    Ident, ImplItemFn, ItemTrait, Path, Token, Visibility,
+    Attribute, Ident, ImplItemFn, ItemTrait, Path, Token,
+    Visibility,
 };
 
 struct Machine {
+    attributes: Vec<Attribute>,
     visibility: Option<Visibility>,
     name: Ident,
     context: Path,
@@ -20,6 +22,12 @@ struct Machine {
 impl Parse for Machine {
     #[allow(clippy::too_many_lines)]
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let attributes = input
+            .peek(Token![#])
+            .then(|| Attribute::parse_outer(input))
+            .transpose()?
+            .unwrap_or_default();
+
         let visibility = input
             .peek(Token![pub])
             .then(|| input.parse())
@@ -93,6 +101,7 @@ impl Parse for Machine {
         })?;
 
         Ok(Self {
+            attributes,
             visibility,
             name,
             context,
@@ -129,6 +138,7 @@ pub fn deterministic_state_machine(
     input: TokenStream,
 ) -> TokenStream {
     let Machine {
+        attributes,
         visibility,
         name,
         context,
@@ -154,6 +164,7 @@ pub fn deterministic_state_machine(
         });
 
     let expanded = quote! {
+        #(#attributes)*
         #visibility struct #name<State>
         #state_trait_where_clause
         {
