@@ -1,19 +1,21 @@
 use syn::{
-    FnArg, Ident, ItemTrait, Path, ReturnType, TraitItem,
-    Type,
+    token::Async, FnArg, Ident, ItemTrait, Path,
+    ReturnType, TraitItem, Type,
 };
 
 // NOTE: Haven't refactored out the fn check becuase the
 // decision on the fn signature is still not firm.
 
 pub fn ensure_state_trait(
+    asyncness: Option<Async>,
     trait_: &mut ItemTrait,
     context_path: &Path,
     event_enum_iden: &Ident,
 ) -> syn::Result<()> {
-    ensure_on_enter_fn(trait_, context_path)?;
-    ensure_on_exit_fn(trait_, context_path)?;
+    ensure_on_enter_fn(asyncness, trait_, context_path)?;
+    ensure_on_exit_fn(asyncness, trait_, context_path)?;
     ensure_should_exit_fn(
+        asyncness,
         trait_,
         context_path,
         event_enum_iden,
@@ -26,6 +28,7 @@ pub fn ensure_state_trait(
 /// If it is present but has a different signature, we
 /// return an error.
 fn ensure_on_enter_fn(
+    asyncness: Option<Async>,
     trait_: &mut ItemTrait,
     context_path: &Path,
 ) -> syn::Result<()> {
@@ -121,7 +124,7 @@ fn ensure_on_enter_fn(
         }
     } else {
         let on_enter = syn::parse_quote! {
-            fn on_enter(&mut self, context: &mut #context_path) {}
+            #asyncness fn on_enter(&mut self, context: &mut #context_path) {}
         };
 
         trait_.items.push(TraitItem::Fn(on_enter));
@@ -131,6 +134,7 @@ fn ensure_on_enter_fn(
 }
 
 fn ensure_on_exit_fn(
+    asyncness: Option<Async>,
     trait_: &mut ItemTrait,
     context_path: &Path,
 ) -> syn::Result<()> {
@@ -226,7 +230,7 @@ fn ensure_on_exit_fn(
         }
     } else {
         let on_exit = syn::parse_quote! {
-            fn on_exit(&mut self, context: &mut #context_path) {}
+            #asyncness fn on_exit(&mut self, context: &mut #context_path) {}
         };
 
         trait_.items.push(TraitItem::Fn(on_exit));
@@ -237,6 +241,7 @@ fn ensure_on_exit_fn(
 
 #[allow(clippy::too_many_lines)]
 fn ensure_should_exit_fn(
+    asyncness: Option<Async>,
     trait_: &mut ItemTrait,
     context_path: &Path,
     event_enum_ident: &Ident,
@@ -254,10 +259,9 @@ fn ensure_should_exit_fn(
 
     if let Some(func) = func {
         const FIRST_ARG_ERROR: &str =
-            "must accept `&mut self` as the first argument";
-        const SECOND_ARG_ERROR: &str = "must accept `&mut {Context}` as the second argument";
-        const THRID_ARG_ERROR: &str =
-            "must accept `Event` as the third argument";
+            "must accept `&self` as the first argument";
+        const SECOND_ARG_ERROR: &str = "must accept `&{Context}` as the second argument";
+        const THRID_ARG_ERROR: &str = "must accept `&{EventEnum}` as the third argument";
         const RETURN_ERROR: &str = "must return a `bool`";
 
         let mut inputs = func.sig.inputs.iter();
@@ -279,7 +283,7 @@ fn ensure_should_exit_fn(
             ));
         };
 
-        if first_input.mutability.is_none()
+        if first_input.mutability.is_some()
             || first_input.reference.is_none()
         {
             return Err(syn::Error::new_spanned(
@@ -308,7 +312,7 @@ fn ensure_should_exit_fn(
         #[allow(clippy::wildcard_enum_match_arm)]
         let second_input_ty = match &*second_input.ty {
             Type::Reference(r)
-                if r.mutability.is_some() =>
+                if r.mutability.is_none() =>
             {
                 r.elem.as_ref()
             }
@@ -346,7 +350,7 @@ fn ensure_should_exit_fn(
         #[allow(clippy::wildcard_enum_match_arm)]
         let third_input_ty = match &*third_input.ty {
             Type::Reference(r)
-                if r.mutability.is_some() =>
+                if r.mutability.is_none() =>
             {
                 r.elem.as_ref()
             }
@@ -391,7 +395,7 @@ fn ensure_should_exit_fn(
         }
     } else {
         let on_exit = syn::parse_quote! {
-            fn should_exit(&self, _context: &#context_path, _event: &#event_enum_ident) -> bool {
+            #asyncness fn should_exit(&self, _context: &#context_path, _event: &#event_enum_ident) -> bool {
                 true
             }
         };

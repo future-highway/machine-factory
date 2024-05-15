@@ -7,6 +7,7 @@
 #![allow(missing_docs)]
 #![allow(clippy::print_stdout)]
 
+use async_trait::async_trait;
 use core::time::Duration;
 use machine_factory::event_driven_finite_state_machine;
 use state_machines::camera::{
@@ -23,20 +24,30 @@ struct Context {
 // States
 #[derive(Default)]
 struct Red;
+
+#[async_trait]
 impl TrafficLightStateTrait for Red {
-    fn on_enter(&mut self, context: &mut Context) {
-        _ = context.camera.handle_event(StartRecording {});
+    async fn on_enter(&mut self, context: &mut Context) {
+        _ = context
+            .camera
+            .handle_event(StartRecording {})
+            .await;
     }
 
-    fn on_exit(&mut self, context: &mut Context) {
-        _ = context.camera.handle_event(StopRecording {});
+    async fn on_exit(&mut self, context: &mut Context) {
+        _ = context
+            .camera
+            .handle_event(StopRecording {})
+            .await;
     }
 }
 
 #[derive(Default)]
 struct Yellow;
+
+#[async_trait]
 impl TrafficLightStateTrait for Yellow {
-    fn should_exit(
+    async fn should_exit(
         &self,
         _context: &Context,
         event: &TrafficLightEvent,
@@ -50,8 +61,10 @@ impl TrafficLightStateTrait for Yellow {
 
 #[derive(Default)]
 struct Green;
+
+#[async_trait]
 impl TrafficLightStateTrait for Green {
-    fn should_exit(
+    async fn should_exit(
         &self,
         _context: &Context,
         event: &TrafficLightEvent,
@@ -69,17 +82,17 @@ impl TrafficLightEventTrait for Next {}
 
 impl TrafficLightEventTrait for StopRecording {}
 
-event_driven_finite_state_machine!(TrafficLight {
+event_driven_finite_state_machine!(async TrafficLight {
     context: Context ,
     state_enum: TrafficLightState,
     state_trait: trait TrafficLightStateTrait {},
     event_enum: TrafficLightEvent,
-    event_trait: trait TrafficLightEventTrait {},
+    event_trait: trait TrafficLightEventTrait: Send {},
     transitions: [
         Red {
             Next -> Green,
             StopRecording {
-                _ = context.camera.handle_event(event.clone());
+                _ = context.camera.handle_event(event.clone()).await;
                 state
             }
         },
@@ -95,25 +108,26 @@ event_driven_finite_state_machine!(TrafficLight {
     ],
 });
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut context = Context { camera: Camera::default() };
 
     // `on_enter` is not automatically called when the state
     // machine is initialized, so we need to call it
     // manually.
     let mut state = Red {};
-    state.on_enter(&mut context);
+    state.on_enter(&mut context).await;
 
     let mut traffic_light = TrafficLight::new(Red, context);
 
     let mut count = 0_i32;
     while count < 10_i32 {
-        _ = traffic_light.handle_event(Next {});
+        _ = traffic_light.handle_event(Next {}).await;
         count = count.saturating_add(1);
         sleep(Duration::from_secs(1));
     }
 
-    _ = traffic_light.handle_event(StopRecording {});
+    _ = traffic_light.handle_event(StopRecording {}).await;
 
     println!("Traffic light stopped recording.");
     println!(

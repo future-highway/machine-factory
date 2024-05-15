@@ -1,17 +1,28 @@
 use syn::{
-    FnArg, ItemTrait, Path, TraitItem, TraitItemFn, Type,
+    FnArg, ItemTrait, Path, Token, TraitItem, TraitItemFn,
+    Type,
 };
 
 pub fn ensure_event_trait(
+    asyncness: Option<Token![async]>,
     trait_: &mut ItemTrait,
     context_path: &Path,
 ) -> syn::Result<()> {
-    ensure_pre_transition_fn(trait_, context_path)?;
-    ensure_post_transition_fn(trait_, context_path)?;
+    ensure_pre_transition_fn(
+        asyncness,
+        trait_,
+        context_path,
+    )?;
+    ensure_post_transition_fn(
+        asyncness,
+        trait_,
+        context_path,
+    )?;
     Ok(())
 }
 
 fn ensure_pre_transition_fn(
+    asyncness: Option<Token![async]>,
     trait_: &mut ItemTrait,
     context_path: &Path,
 ) -> syn::Result<()> {
@@ -30,7 +41,7 @@ fn ensure_pre_transition_fn(
         check_transition_fn(func, context_path)?;
     } else {
         let pre_transition = syn::parse_quote! {
-            fn pre_transition(&mut self, _context: &mut #context_path) {}
+            #asyncness fn pre_transition(&mut self, _context: &mut #context_path) {}
         };
 
         trait_.items.push(TraitItem::Fn(pre_transition));
@@ -40,6 +51,7 @@ fn ensure_pre_transition_fn(
 }
 
 fn ensure_post_transition_fn(
+    asyncness: Option<Token![async]>,
     trait_: &mut ItemTrait,
     context_path: &Path,
 ) -> syn::Result<()> {
@@ -58,7 +70,7 @@ fn ensure_post_transition_fn(
         check_transition_fn(func, context_path)?;
     } else {
         let post_transition = syn::parse_quote! {
-            fn post_transition(&mut self, _context: &mut #context_path) {}
+            #asyncness fn post_transition(&mut self, _context: &mut #context_path) {}
         };
 
         trait_.items.push(TraitItem::Fn(post_transition));

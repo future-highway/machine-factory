@@ -15,7 +15,7 @@ use syn::{
     parse_macro_input, parse_quote,
     punctuated::Punctuated,
     spanned::Spanned,
-    token::{Brace, Comma},
+    token::{Async, Brace, Comma},
     Attribute, Block, FnArg, Ident, Path, Token, TraitItem,
     Visibility,
 };
@@ -23,6 +23,7 @@ use syn::{
 struct Machine {
     attributes: Vec<Attribute>,
     visibility: Option<Visibility>,
+    asyncness: Option<Async>,
     name: Ident,
     context_path: Path,
     state_enum_attrs: Vec<Attribute>,
@@ -47,6 +48,11 @@ impl Parse for Machine {
             .peek(Token![pub])
             .then(|| input.parse())
             .transpose()?;
+
+        let asyncness = input
+            .peek(Token![async])
+            .then(|| input.parse::<Token![async]>().expect("peeked async"));
+
         let name: Ident = input.parse()?;
 
         let content;
@@ -192,6 +198,7 @@ impl Parse for Machine {
         Ok(Self {
             attributes,
             visibility,
+            asyncness,
             name,
             context_path,
             state_enum_attrs: state_enum_attrs
@@ -292,6 +299,7 @@ pub(super) fn event_driven_finite_state_machine(
     let Machine {
         attributes,
         visibility,
+        asyncness,
         name,
         context_path,
         state_enum_attrs,
@@ -303,7 +311,10 @@ pub(super) fn event_driven_finite_state_machine(
         transitions,
     } = parse_macro_input!(input as Machine);
 
+    let async_postfix = asyncness.is_some().then(|| quote!(.await));
+
     if let Err(e) = ensure_state_trait(
+        asyncness,
         &mut state_trait,
         &context_path,
         &event_enum_ident,
@@ -314,9 +325,17 @@ pub(super) fn event_driven_finite_state_machine(
     let state_trait_path = &state_trait.ident;
 
     if let Err(e) =
-        ensure_event_trait(&mut event_trait, &context_path)
+        ensure_event_trait(asyncness, &mut event_trait, &context_path)
     {
         return e.to_compile_error().into();
+    }
+
+    let async_trait_attr: Attribute = parse_quote!(#[::async_trait::async_trait]);
+    let maybe_async_trait_attr = asyncness.is_some().then_some(&async_trait_attr);
+
+    if asyncness.is_some() {
+        state_trait.attrs.push(async_trait_attr.clone());
+        event_trait.attrs.push(async_trait_attr.clone());
     }
 
     let event_trait_path = &event_trait.ident;
@@ -410,13 +429,13 @@ pub(super) fn event_driven_finite_state_machine(
             quote! {
                 (#state_enum_ident::#state_ident(state), #event_enum_ident::#event_ident(event)) => {
                     #[allow(non_snake_case)]
-                    fn #function_ident(
+                    #asyncness fn #function_ident(
                         mut state: #state_path,
                         event: &mut #event_path,
                         context: &mut #context_path,
                     ) -> impl Into<#state_enum_ident> #block
                 
-                    #function_ident(state, event, &mut self.context).into()
+                    #function_ident(state, event, &mut self.context)#async_postfix.into()
                 }
             }
         })
@@ -456,16 +475,22 @@ pub(super) fn event_driven_finite_state_machine(
 
     #[allow(clippy::wildcard_enum_match_arm)]
     let event_trait_function_sigs = event_trait.items.iter().filter_map(|item| match item {
-        TraitItem::Fn(f) => Some((f.sig.ident.to_string(), f.sig.clone())),
+        TraitItem::Fn(f) => Some(f.sig.clone()),
         _ => None,
     })
-    .chain([
-        ("pre_transition".to_owned(), parse_quote!(fn pre_transition(&mut self, context: &mut #context_path))),
-        ("post_transition".to_owned(), parse_quote!(fn post_transition(&mut self, context: &mut #context_path))),
-    ])
-    .collect::<HashMap<_, _>>();
+    .collect::<Vec<_>>();
 
-    let event_enum_trait_functions = event_trait_function_sigs.values().map(|sig| {
+    let pre_transition_postfix = event_trait_function_sigs
+        .iter()
+        .find(|sig| sig.ident == "pre_transition")
+        .and_then(|sig| sig.asyncness.and_then(|_| async_postfix.clone()));
+
+    let post_transition_postfix = event_trait_function_sigs
+        .iter()
+        .find(|sig| sig.ident == "post_transition")
+        .and_then(|sig| sig.asyncness.and_then(|_| async_postfix.clone()));
+
+    let event_enum_trait_functions = event_trait_function_sigs.iter().map(|sig| {
         let ident = &sig.ident;
         let args = sig.inputs.iter().skip(1).map(|input| {
             let FnArg::Typed(input) = input else {
@@ -478,10 +503,11 @@ pub(super) fn event_driven_finite_state_machine(
         })
         .collect::<syn::Result<Vec<_>>>()?;
 
+        let async_postfix = sig.asyncness.as_ref().map(|_| quote!(.await));
         let args = once(quote!(event)).chain(args).collect::<Vec<_>>();
         let arms = event_path_ident.iter().map(|(event_path, event_ident)| {
             quote! {
-                Self::#event_ident(event) => #event_path::#ident(#(#args),*),
+                Self::#event_ident(event) => #event_path::#ident(#(#args),*)#async_postfix,
             }
         });
 
@@ -502,6 +528,7 @@ pub(super) fn event_driven_finite_state_machine(
         };
 
     let event_enum_trait_impl = quote! {
+        #maybe_async_trait_attr
         impl #event_trait_path for #event_enum_ident {
             #(#event_enum_trait_functions)*
         }
@@ -541,16 +568,27 @@ pub(super) fn event_driven_finite_state_machine(
 
     #[allow(clippy::wildcard_enum_match_arm)]
     let state_trait_function_sigs = state_trait.items.iter().filter_map(|item| match item {
-        TraitItem::Fn(f) => Some((f.sig.ident.to_string(), f.sig.clone())),
+        TraitItem::Fn(f) => Some(f.sig.clone()),
         _ => None,
     })
-    .chain([
-        ("on_enter".to_owned(), parse_quote!(fn on_enter(&mut self, context: &mut #context_path))),
-        ("on_exit".to_owned(), parse_quote!(fn on_exit(&mut self, context: &mut #context_path))),
-    ])
-    .collect::<HashMap<_, _>>();
+    .collect::<Vec<_>>();
 
-    let state_enum_trait_functions = state_trait_function_sigs.values().map(|sig| {
+    let on_enter_postfix = state_trait_function_sigs
+        .iter()
+        .find(|sig| sig.ident == "on_enter")
+        .and_then(|sig| sig.asyncness.and_then(|_| async_postfix.clone()));
+
+    let on_exit_postfix = state_trait_function_sigs
+        .iter()
+        .find(|sig| sig.ident == "on_exit")
+        .and_then(|sig| sig.asyncness.and_then(|_| async_postfix.clone()));
+
+    let should_exit_postfix = state_trait_function_sigs
+        .iter()
+        .find(|sig| sig.ident == "should_exit")
+        .and_then(|sig| sig.asyncness.and_then(|_| async_postfix.clone()));
+
+    let state_enum_trait_functions = state_trait_function_sigs.iter().map(|sig| {
         let ident = &sig.ident;
         let args = sig.inputs.iter().skip(1).map(|input| {
             let FnArg::Typed(input) = input else {
@@ -563,10 +601,11 @@ pub(super) fn event_driven_finite_state_machine(
         })
         .collect::<syn::Result<Vec<_>>>()?;
 
+        let async_postfix = sig.asyncness.as_ref().map(|_| quote!(.await));
         let args = once(quote!(state)).chain(args).collect::<Vec<_>>();
         let arms = state_path_ident.iter().map(|(state_path, state_ident)| {
             quote! {
-                Self::#state_ident(state) => #state_path::#ident(#(#args),*),
+                Self::#state_ident(state) => #state_path::#ident(#(#args),*)#async_postfix,
             }
         });
 
@@ -587,6 +626,7 @@ pub(super) fn event_driven_finite_state_machine(
         };
 
     let state_enum_trait_impl = quote! {
+        #maybe_async_trait_attr
         impl #state_trait_path for #state_enum_ident {
             #(#state_enum_trait_functions)*
         }
@@ -662,27 +702,27 @@ pub(super) fn event_driven_finite_state_machine(
                 (state, context)
             }
 
-            pub fn handle_event<Event: Into<#event_enum_ident> + #event_trait_path>(&mut self, event: Event) -> &mut Self {
+            pub #asyncness fn handle_event<Event: Into<#event_enum_ident> + #event_trait_path>(&mut self, event: Event) -> &mut Self {
                 let mut event = event.into();
                 let mut state = self.state.take().expect("state is missing");
 
-                if !#state_enum_ident::should_exit(&state, &self.context, &event) {
+                if !#state_enum_ident::should_exit(&state, &self.context, &event)#should_exit_postfix {
                     self.state.replace(state);
                     return self;
                 }
 
-                #state_trait_path::on_exit(&mut state, &mut self.context);
-                #event_trait_path::pre_transition(&mut event, &mut self.context);
+                #state_trait_path::on_exit(&mut state, &mut self.context)#on_exit_postfix;
+                #event_trait_path::pre_transition(&mut event, &mut self.context)#pre_transition_postfix;
 
                 let mut state: #state_enum_ident = match (state, &mut event) {
                     #(#handle_event_match_arms)*
                     #unhandled_event
                 };
 
-                #event_trait_path::post_transition(&mut event, &mut self.context);
-                #state_trait_path::on_enter(&mut state, &mut self.context);
+                #event_trait_path::post_transition(&mut event, &mut self.context)#post_transition_postfix;
+                #state_trait_path::on_enter(&mut state, &mut self.context)#on_enter_postfix;
 
-                _ = self.state.replace(state);
+                self.state = ::std::option::Option::Some(state);
                 self
             }
         }
