@@ -21,12 +21,13 @@ use std::thread::sleep;
 
 mod state_machines;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut camera = Camera::default();
 
-    _ = camera.handle_event(StartRecording {});
+    _ = camera.handle_event(StartRecording {}).await;
     sleep(Duration::from_secs(2));
-    _ = camera.handle_event(StopRecording {});
+    _ = camera.handle_event(StopRecording {}).await;
 
     assert!(
         camera.context().total_recorded_seconds >= 2,

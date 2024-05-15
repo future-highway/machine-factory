@@ -1,6 +1,7 @@
 #![allow(clippy::missing_trait_methods)]
 #![allow(dead_code)] // there are false positives
 
+use async_trait::async_trait;
 use machine_factory::event_driven_finite_state_machine;
 use std::time::Instant;
 
@@ -10,7 +11,11 @@ pub struct Storage {
 }
 
 #[derive(Default, Debug)]
-struct Standby;
+pub struct Standby;
+
+// We are going to make `Camera` async, so we need to add
+// the `#[async_trait]` attribute
+#[async_trait]
 impl CameraStateTrait for Standby {
     fn should_exit(
         &self,
@@ -22,7 +27,7 @@ impl CameraStateTrait for Standby {
 }
 
 #[derive(Debug)]
-struct Recording {
+pub struct Recording {
     started_recording_at: Instant,
 }
 
@@ -32,8 +37,9 @@ impl Default for Recording {
     }
 }
 
+#[async_trait]
 impl CameraStateTrait for Recording {
-    fn on_exit(&mut self, context: &mut Storage) {
+    async fn on_exit(&mut self, context: &mut Storage) {
         context.total_recorded_seconds =
             context.total_recorded_seconds.saturating_add(
                 self.started_recording_at
@@ -61,12 +67,20 @@ impl CameraEventTrait for StopRecording {}
 
 event_driven_finite_state_machine!(
     #[derive(Debug)]
-    Camera {
+    pub async Camera {
         context: Storage,
         state_enum: #[derive(Debug)] CameraState,
-        state_trait: trait CameraStateTrait {},
+        state_trait: trait CameraStateTrait {
+            // The camera is defaulting to `async`, so we override the default
+            // `should_exit` method to not be async, as it's not needed.
+            fn should_exit(
+                &self,
+                context: &Storage,
+                event: &CameraEvent,
+            ) -> bool;
+        },
         event_enum: CameraEvent,
-        event_trait: trait CameraEventTrait {},
+        event_trait: trait CameraEventTrait: Send {},
         transitions: [
             Standby {
                 StartRecording -> Recording,
