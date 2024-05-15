@@ -41,7 +41,7 @@ fn ensure_pre_transition_fn(
         check_transition_fn(func, context_path)?;
     } else {
         let pre_transition = syn::parse_quote! {
-            #asyncness fn pre_transition(&mut self, _context: &mut #context_path) {}
+            #asyncness fn pre_transition(&mut self, context: &mut #context_path) {}
         };
 
         trait_.items.push(TraitItem::Fn(pre_transition));
@@ -70,7 +70,7 @@ fn ensure_post_transition_fn(
         check_transition_fn(func, context_path)?;
     } else {
         let post_transition = syn::parse_quote! {
-            #asyncness fn post_transition(&mut self, _context: &mut #context_path) {}
+            #asyncness fn post_transition(&mut self, context: &mut #context_path) {}
         };
 
         trait_.items.push(TraitItem::Fn(post_transition));

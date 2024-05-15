@@ -290,6 +290,7 @@ struct StateEvent {
     event_path: Path,
     event_ident: Ident,
     block: Block,
+    is_default: bool,
 }
 
 #[allow(clippy::too_many_lines)]
@@ -388,12 +389,12 @@ pub(super) fn event_driven_state_machine(
                 return Err(syn::Error::new(event_path.span(), "event path is empty"));
             };
 
-            let block = match block {
-                TransitionBlock::Block(block) => block,
+            let (block, is_default) = match block {
+                TransitionBlock::Block(block) => (block, false),
                 TransitionBlock::Default(target) => {
-                    syn::parse_quote! {{
+                    (syn::parse_quote! {{
                         #target::default()
-                    }}
+                    }}, true)
                 }
             };
 
@@ -403,6 +404,7 @@ pub(super) fn event_driven_state_machine(
                 event_path,
                 event_ident,
                 block,
+                is_default,
             })
         })
         .collect::<syn::Result<Vec<_>>>()
@@ -417,25 +419,33 @@ pub(super) fn event_driven_state_machine(
     };
 
     let handle_event_match_arms = state_events.iter()
-        .map(|StateEvent { state_path, state_ident, event_path, event_ident, block }| {
-            let function_ident = Ident::new(
-                &format!("handle__{}__{}", 
-                    state_ident.to_string().to_snake_case(),
-                    event_ident.to_string().to_snake_case()
-                ),
-                state_ident.span(),
-            );
+        .map(|StateEvent { state_path, state_ident, event_path, event_ident, block, is_default }| {
+            if *is_default {
+                quote! {
+                    (#state_enum_ident::#state_ident(state), #event_enum_ident::#event_ident(event)) => {
+                        #block.into()
+                    }
+                }
+            } else {
+                let function_ident = Ident::new(
+                    &format!("handle__{}__{}", 
+                        state_ident.to_string().to_snake_case(),
+                        event_ident.to_string().to_snake_case()
+                    ),
+                    state_ident.span(),
+                );
 
-            quote! {
-                (#state_enum_ident::#state_ident(state), #event_enum_ident::#event_ident(event)) => {
-                    #[allow(non_snake_case)]
-                    #asyncness fn #function_ident(
-                        mut state: #state_path,
-                        event: &mut #event_path,
-                        context: &mut #context_path,
-                    ) -> impl Into<#state_enum_ident> #block
-                
-                    #function_ident(state, event, &mut self.context)#async_postfix.into()
+                quote! {
+                    (#state_enum_ident::#state_ident(state), #event_enum_ident::#event_ident(event)) => {
+                        #[allow(non_snake_case)]
+                        #asyncness fn #function_ident(
+                            mut state: #state_path,
+                            event: &mut #event_path,
+                            context: &mut #context_path,
+                        ) -> impl Into<#state_enum_ident> #block
+                    
+                        #function_ident(state, event, &mut self.context)#async_postfix.into()
+                    }
                 }
             }
         })
@@ -467,7 +477,7 @@ pub(super) fn event_driven_state_machine(
             quote! {
                 impl From<#event_path> for #event_enum_ident {
                     fn from(event: #event_path) -> Self {
-                        #event_enum_ident::#event_ident(event)
+                        Self::#event_ident(event)
                     }
                 }
             }
@@ -628,7 +638,7 @@ pub(super) fn event_driven_state_machine(
     let state_enum_trait_impl = quote! {
         #maybe_async_trait_attr
         impl #state_trait_path for #state_enum_ident {
-            #(#state_enum_trait_functions)*
+            #(#[allow(clippy::used_underscore_binding)] #state_enum_trait_functions)*
         }
     };
 
@@ -672,12 +682,12 @@ pub(super) fn event_driven_state_machine(
         #(#attributes)*
         #visibility struct #name {
             context: #context_path,
-            state: ::std::option::Option<#state_enum_ident>,
+            state: ::core::option::Option<#state_enum_ident>,
         }
 
         impl #name {
             pub fn new<State: Into<#state_enum_ident> + #state_trait_path>(state: State, context: #context_path) -> Self {
-                Self { context, state: ::std::option::Option::Some(state.into()) }
+                Self { context, state: ::core::option::Option::Some(state.into()) }
             }
 
             pub fn context(&self) -> &#context_path {
@@ -707,7 +717,7 @@ pub(super) fn event_driven_state_machine(
                 let mut state = self.state.take().expect("state is missing");
 
                 if !#state_enum_ident::should_exit(&state, &self.context, &event)#should_exit_postfix {
-                    self.state.replace(state);
+                    self.state = ::core::option::Option::Some(state);
                     return self;
                 }
 
@@ -722,7 +732,7 @@ pub(super) fn event_driven_state_machine(
                 #event_trait_path::post_transition(&mut event, &mut self.context)#post_transition_postfix;
                 #state_trait_path::on_enter(&mut state, &mut self.context)#on_enter_postfix;
 
-                self.state = ::std::option::Option::Some(state);
+                self.state = ::core::option::Option::Some(state);
                 self
             }
         }
