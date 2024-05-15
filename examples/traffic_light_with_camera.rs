@@ -9,7 +9,7 @@
 
 use async_trait::async_trait;
 use core::time::Duration;
-use machine_factory::event_driven_finite_state_machine;
+use machine_factory::event_driven_state_machine;
 use state_machines::camera::{
     Camera, StartRecording, StopRecording,
 };
@@ -82,7 +82,7 @@ impl TrafficLightEventTrait for Next {}
 
 impl TrafficLightEventTrait for StopRecording {}
 
-event_driven_finite_state_machine!(async TrafficLight {
+event_driven_state_machine!(async TrafficLight {
     context: Context ,
     state_enum: TrafficLightState,
     state_trait: trait TrafficLightStateTrait {},

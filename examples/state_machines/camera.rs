@@ -2,7 +2,7 @@
 #![allow(dead_code)] // there are false positives
 
 use async_trait::async_trait;
-use machine_factory::event_driven_finite_state_machine;
+use machine_factory::event_driven_state_machine;
 use std::time::Instant;
 
 #[derive(Debug)]
@@ -65,7 +65,7 @@ impl CameraEventTrait for StartRecording {}
 pub struct StopRecording;
 impl CameraEventTrait for StopRecording {}
 
-event_driven_finite_state_machine!(
+event_driven_state_machine!(
     #[derive(Debug)]
     pub async Camera {
         context: Storage,

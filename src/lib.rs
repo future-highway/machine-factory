@@ -3,7 +3,7 @@
 use proc_macro::TokenStream;
 
 mod deterministic_state_machine;
-mod event_driven_finite_state_machine;
+mod event_driven_state_machine;
 mod event_enum;
 mod event_trait;
 mod state_enum;
@@ -11,10 +11,12 @@ mod state_trait;
 
 /// Build an event driven finite state machine.
 #[proc_macro]
-pub fn event_driven_finite_state_machine(
+pub fn event_driven_state_machine(
     input: TokenStream,
 ) -> TokenStream {
-    event_driven_finite_state_machine::event_driven_finite_state_machine(input)
+    event_driven_state_machine::event_driven_state_machine(
+        input,
+    )
 }
 
 /// Build a deterministic finite state machine.
