@@ -122,6 +122,13 @@ fn ensure_on_enter_fn(
                 "must not have more than two arguments",
             ));
         }
+
+        if !matches!(func.sig.output, ReturnType::Default) {
+            return Err(syn::Error::new_spanned(
+                func,
+                "must not have a return type",
+            ));
+        }
     } else {
         let on_enter = syn::parse_quote! {
             #asyncness fn on_enter(&mut self, context: &mut #context_path) {}
@@ -226,6 +233,13 @@ fn ensure_on_exit_fn(
             return Err(syn::Error::new_spanned(
                 func,
                 "must not have more than two arguments",
+            ));
+        }
+
+        if !matches!(func.sig.output, ReturnType::Default) {
+            return Err(syn::Error::new_spanned(
+                func,
+                "must not have a return type",
             ));
         }
     } else {
