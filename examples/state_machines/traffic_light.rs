@@ -3,7 +3,7 @@
 #![allow(clippy::missing_trait_methods)]
 #![allow(dead_code)] // there are false positives
 
-use machine_factory::event_driven_finite_state_machine;
+use machine_factory::event_driven_state_machine;
 use std::time::Instant;
 
 // First, we define the context that the traffic light will
@@ -75,7 +75,7 @@ impl TrafficLightState for Green {
 }
 
 // Finally, we define the state machine
-event_driven_finite_state_machine!(
+event_driven_state_machine!(
     pub TrafficLight {
         context: TrafficLightContext,
         event_trait:  trait TrafficLightEvent {},
