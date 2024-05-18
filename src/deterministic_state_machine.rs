@@ -16,7 +16,7 @@ struct Machine {
     name: Ident,
     context: Path,
     state_trait: Option<ItemTrait>,
-    transitions: Vec<StateTransitions>,
+    state_transitions: Vec<StateTransitions>,
 }
 
 impl Parse for Machine {
@@ -31,6 +31,11 @@ impl Parse for Machine {
         let visibility = input
             .peek(Token![pub])
             .then(|| input.parse())
+            .transpose()?;
+
+        _ = input
+            .peek(Token![struct])
+            .then(|| input.parse::<Token![struct]>())
             .transpose()?;
 
         let name = input.parse()?;
@@ -53,7 +58,7 @@ impl Parse for Machine {
                 "state_trait" => {
                     state_trait = Some(content.parse()?);
                 }
-                "transitions" => {
+                "states" => {
                     let transitions_content;
                     _ = bracketed!(transitions_content in content);
                     let parsed_transitions =
@@ -106,7 +111,7 @@ impl Parse for Machine {
             name,
             context,
             state_trait,
-            transitions,
+            state_transitions: transitions,
         })
     }
 }
@@ -143,10 +148,10 @@ pub fn deterministic_state_machine(
         name,
         context,
         state_trait,
-        transitions,
+        state_transitions,
     } = parse_macro_input!(input as Machine);
 
-    let next_impls = transitions
+    let next_impls = state_transitions
         .into_iter()
         .map(|StateTransitions { state, transitions }| {
             quote! {

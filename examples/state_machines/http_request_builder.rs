@@ -49,7 +49,7 @@ deterministic_state_machine!(
         context: HttpRequestBuilderData,
         // Optionally specify a trait that all states must implement
         state_trait: trait HttpRequestStateTrait {},
-        transitions: [
+        states: [
             NeedsMethod {
                 pub fn set_method(self, method: Method) -> HttpRequest<NeedsUrl> {
                     let Self { mut context, .. } = self;
