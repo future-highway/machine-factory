@@ -45,7 +45,7 @@ impl Parse for Machine {
 
         let mut context = None;
         let mut state_trait = None;
-        let mut transitions = None;
+        let mut state_transitions = None;
 
         while content.peek(Ident) {
             let label: Ident = content.parse()?;
@@ -68,7 +68,7 @@ impl Parse for Machine {
                         >::parse_terminated(
                             &transitions_content,
                         )?;
-                    transitions = Some(
+                    state_transitions = Some(
                         parsed_transitions
                             .into_iter()
                             .collect::<Vec<_>>(),
@@ -98,12 +98,13 @@ impl Parse for Machine {
             )
         })?;
 
-        let transitions = transitions.ok_or_else(|| {
-            syn::Error::new(
-                input.span(),
-                "missing `transitions`",
-            )
-        })?;
+        let state_transitions = state_transitions
+            .ok_or_else(|| {
+                syn::Error::new(
+                    input.span(),
+                    "missing `states`",
+                )
+            })?;
 
         Ok(Self {
             attributes,
@@ -111,7 +112,7 @@ impl Parse for Machine {
             name,
             context,
             state_trait,
-            state_transitions: transitions,
+            state_transitions,
         })
     }
 }
