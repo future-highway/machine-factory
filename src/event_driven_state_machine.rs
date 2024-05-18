@@ -32,7 +32,8 @@ struct Machine {
     event_enum_attrs: Vec<Attribute>,
     event_enum_ident: Ident,
     event_trait: syn::ItemTrait,
-    transitions: Vec<StateTransitions>,
+    state_transitions: Vec<StateTransitions>,
+    other_events: Vec<Path>,
 }
 
 impl Parse for Machine {
@@ -53,6 +54,8 @@ impl Parse for Machine {
             .peek(Token![async])
             .then(|| input.parse::<Token![async]>().expect("peeked async"));
 
+        _ = input.peek(Token![struct]).then(|| input.parse::<Token![struct]>()).transpose()?;
+
         let name: Ident = input.parse()?;
 
         let content;
@@ -65,7 +68,8 @@ impl Parse for Machine {
         let mut event_enum_attrs = None;
         let mut event_enum_ident = None;
         let mut event_trait_path = None;
-        let mut transitions = None;
+        let mut state_transitions = None;
+        let mut other_events = None;
 
         while content.peek(Ident) {
             let label: Ident = content.parse()?;
@@ -73,51 +77,29 @@ impl Parse for Machine {
 
             match label.to_string().as_str() {
                 "context" => {
-                    drop(
-                        context_path
-                            .replace(content.parse()?),
-                    );
+                    context_path = Some(content.parse()?);
                 }
                 "state_enum" => {
                     if content.peek(Token![#]) {
-                        drop(state_enum_attrs.replace(
-                            Attribute::parse_outer(
-                                &content,
-                            )?,
-                        ));
+                        state_enum_attrs = Some(Attribute::parse_outer(&content)?);
                     }
 
-                    drop(
-                        state_enum_ident
-                            .replace(content.parse()?),
-                    );
+                    state_enum_ident = Some(content.parse()?);
                 }
                 "state_trait" => {
-                    drop(
-                        state_trait
-                            .replace(content.parse()?),
-                    );
+                    state_trait = Some(content.parse()?);
                 }
                 "event_enum" => {
                     if content.peek(Token![#]) {
-                        drop(event_enum_attrs.replace(
-                            Attribute::parse_outer(
-                                &content,
-                            )?,
-                        ));
+                        event_enum_attrs = Some(Attribute::parse_outer(&content)?);
                     }
-                    drop(
-                        event_enum_ident
-                            .replace(content.parse()?),
-                    );
+
+                    event_enum_ident = Some(content.parse()?);
                 }
                 "event_trait" => {
-                    drop(
-                        event_trait_path
-                            .replace(content.parse()?),
-                    );
+                    event_trait_path = Some(content.parse()?);
                 }
-                "transitions" => {
+                "states" => {
                     let content2;
                     let _ = bracketed!(content2 in content);
                     let parsed_transitions =
@@ -127,14 +109,31 @@ impl Parse for Machine {
                         >::parse_terminated(
                             &content2
                         )?;
+
                     let parsed_transitions =
                         parsed_transitions
                             .into_iter()
                             .collect();
-                    drop(
-                        transitions
-                            .replace(parsed_transitions),
-                    );
+
+                    state_transitions = Some(parsed_transitions);
+                }
+                "events" => {
+                    let content2;
+                    let _ = bracketed!(content2 in content);
+                    let parsed_events =
+                        Punctuated::<
+                            Path,
+                            Comma,
+                        >::parse_terminated(
+                            &content2
+                        )?;
+
+                    let parsed_events =
+                        parsed_events
+                            .into_iter()
+                            .collect();
+
+                    other_events = Some(parsed_events);
                 }
                 _ => {
                     return Err(syn::Error::new(
@@ -188,10 +187,10 @@ impl Parse for Machine {
                 )
             })?;
 
-        let transitions = transitions.ok_or_else(|| {
+        let state_transitions = state_transitions.ok_or_else(|| {
             syn::Error::new(
                 name.span(),
-                "machine is missing transitions",
+                "machine is missing states",
             )
         })?;
 
@@ -209,7 +208,8 @@ impl Parse for Machine {
                 .unwrap_or_default(),
             event_enum_ident,
             event_trait,
-            transitions,
+            state_transitions,
+            other_events: other_events.unwrap_or_default(),
         })
     }
 }
@@ -309,7 +309,8 @@ pub(super) fn event_driven_state_machine(
         event_enum_attrs,
         event_enum_ident,
         mut event_trait,
-        transitions,
+        state_transitions,
+        other_events,
     } = parse_macro_input!(input as Machine);
 
     let async_postfix = asyncness.is_some().then(|| quote!(.await));
@@ -342,7 +343,7 @@ pub(super) fn event_driven_state_machine(
     let event_trait_path = &event_trait.ident;
 
     let unhandled_event = {
-        let mut unhandled_event = transitions
+        let mut unhandled_event = state_transitions
             .iter()
             .filter_map(|transition| {
                 if let StateTransitions::Default(block) =
@@ -370,8 +371,8 @@ pub(super) fn event_driven_state_machine(
         unhandled_event.pop().cloned()
     };
 
-    let transitions =
-        transitions.into_iter().filter_map(|transition| {
+    let state_transitions =
+        state_transitions.into_iter().filter_map(|transition| {
             if let StateTransitions::State(x) = transition {
                 Some(x)
             } else {
@@ -379,7 +380,7 @@ pub(super) fn event_driven_state_machine(
             }
         });
 
-    let state_events = transitions.into_iter().map(|StateStateTransitions { state_path, transitions }| {
+    let state_events = state_transitions.into_iter().map(|StateStateTransitions { state_path, transitions }| {
         let Some(state_ident) = state_path.segments.last().map(|s| s.ident.clone()) else {
             return Err(syn::Error::new(state_path.span(), "state path is empty"));
         };
@@ -456,9 +457,24 @@ pub(super) fn event_driven_state_machine(
         .map(|StateEvent { event_path, .. }| {
             event_path.clone()
         })
+        .chain(other_events.iter().cloned())
         .collect::<HashSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
+
+    let other_event_path_ident = other_events.iter().map(|event_path| {
+        let Some(event_ident) = event_path.segments.last().map(|s| s.ident.clone()) else {
+            return Err(syn::Error::new(event_path.span(), "event path is empty"));
+        };
+
+        Ok((event_path.clone(), event_ident))
+    })
+    .collect::<syn::Result<Vec<_>>>();
+
+    let other_event_path_ident = match other_event_path_ident {
+        Ok(x) => x,
+        Err(e) => return e.to_compile_error().into(),
+    };
 
     let event_path_ident = state_events
         .iter()
@@ -469,6 +485,7 @@ pub(super) fn event_driven_state_machine(
                 (event_path.clone(), event_ident.clone())
             },
         )
+        .chain(other_event_path_ident)
         .collect::<HashMap<_, _>>();
 
     let event_from_impls = event_path_ident

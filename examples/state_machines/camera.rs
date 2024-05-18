@@ -81,7 +81,7 @@ event_driven_state_machine!(
         },
         event_enum: CameraEvent,
         event_trait: trait CameraEventTrait: Send {},
-        transitions: [
+        states: [
             Standby {
                 StartRecording -> Recording,
             },

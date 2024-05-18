@@ -10,6 +10,287 @@ mod state_enum;
 mod state_trait;
 
 /// Build an event driven finite state machine.
+///
+/// To raise an event, call the `handle_event` method on the
+/// state machine with the event as an argument. When an
+/// event is handled, a series of functions are called in
+/// the following order:
+///
+/// 1. `should_exit` on the current state (returning `false`
+///    stops the transition)
+/// 2. `on_exit` on the current state
+/// 3. `pre_transition` on the event
+/// 4. A transition block, defined in the state machine
+///    macro that must return the new state
+/// 5. `post_transition` on the event
+/// 6. `on_enter` on the new state
+///
+/// # Example
+/// The following example defines a traffic-light state
+/// machine, slightly more advanced than the one defined in
+/// the docs for the
+/// [`deterministic_state_machine!`] macro. This state
+/// machine will receive events to determine state
+/// transitions.
+///
+/// *The point of the example is to show how to use the
+/// `event_driven_state_machine!` macro, and isn't
+/// the best or even a complete way to model a traffic
+/// light.*
+///
+/// ```rust
+/// # mod traffic_light {
+/// use machine_factory::event_driven_state_machine;
+///
+/// event_driven_state_machine! {
+///     #[derive(Debug)] // Attributes can optionally be added to the generated state machine's struct
+///     #[derive(Clone)] // Multiple attributes are allowed
+///     // Visibility, `async`, and `struct` are optional,
+///     // and are followed by a required Identifier for the state machine.
+///     // The async keyword makes the expanded methods async by default.
+///     pub async struct TrafficLight {
+///         // Path to the context for the state machine
+///         context: TrafficLightContext,
+///         // Identifier for the generated enum of states
+///         // Attributes can also optionally be added to the generated enum
+///         state_enum: #[derive(Debug, Clone)] TrafficLightState,
+///         // Define a trait that all states must implement.
+///         // The macro will automatically define the required methods
+///         // (i.e., `on_enter`, `on_exit`, `should_exit`), with default implementations,
+///         // if they are not provided.
+///         state_trait: pub trait TrafficLightStateTrait {
+///             // The traffic-light is defaulting to `async`, so we override the default
+///             // `should_exit` method to not be async, and provide a default implementation.
+///             fn should_exit(
+///                 &self,
+///                 context: &TrafficLightContext,
+///                 event: &TrafficLightEvent,
+///             ) -> bool {
+///                 if context.in_emergency {
+///                     // If we're in an emergency, we don't want to change the state,
+///                     // unless the vehicle passing is an emergency vehicle.
+///                     return matches!(event, TrafficLightEvent::CarPassed(CarPassed { emergency_vehicle: true }));
+///                 }
+///                 
+///                 true
+///             }
+///
+///             // We can also define additional methods on the trait.
+///             fn color(&self) -> TrafficLightColor;
+///         },
+///         // Identifier for the generated enum of events
+///         // Attributes can also optionally be added to the generated enum, like with `state_enum`
+///         event_enum: TrafficLightEvent,
+///         // Define a trait that all events must implement.
+///         // The macro will automatically define the required methods
+///         // (i.e., `pre_transition`, `post_transtion`), with default implementations,
+///         // if they are not provided.
+///         event_trait: pub trait TrafficLightEventTrait: Send {
+///             // We've added a 'Send' bound to the trait, which is required because
+///             // the `pre_transition` and `post_transition` methods are async,
+///             // and the events are held across async boundaries.
+///
+///             // We can also define additional methods on the trait.
+///             fn is_emergency(&self) -> bool {
+///                 false
+///             }
+///         },
+///         // List of transitions for the state machine
+///         states: [
+///             Red {
+///                 // This is a transition from the `Red` state to the `Green` state,
+///                 // triggered by the `Next` event.
+///                 // Since a body is not provided, `Green::default()` is used to create the new state.
+///                 Next -> Green,
+///                 EmergencyVehicleApproaching {
+///                     // We can use logic to decide which state to transition to.
+///                     // We have access to the current state (`mut state`), the context (`&mut context`),
+///                     // and the event (`&mut event`).
+///                     // Here, we're accessing data on the event to make our decision.
+///                     match event.requested_color {
+///                         TrafficLightColor::Red => {
+///                             // Since we may be returning any state, we need to convert it to the state enum.
+///                             // The `from` trait is automatically implemented for each state for the state enum.
+///                             TrafficLightState::from(state)
+///                         },
+///                         TrafficLightColor::Yellow => {
+///                             Yellow {}.into()
+///                         }
+///                         TrafficLightColor::Green => {
+///                             Green {}.into()
+///                         }
+///                     }
+///                 },
+///             },
+///             Yellow {
+///                 Next -> Red,
+///             },
+///             Green {
+///                Next -> Yellow,
+///             },
+///             // You can optionally define a catch-all transition that applies to all state/event pairs not explicitly defined.
+///             _ {
+///                 if let TrafficLightEvent::EmergencyVehicleApproaching(EmergencyVehicleApproaching { requested_color }) = event {
+///                     self.context.in_emergency = true;
+///                     TrafficLightState::from(*requested_color)
+///                 } else {
+///                     // We are going to remain in the same state.
+///                     // This doesn't short-circit the transition like `should_exit` can.
+///                     // `on_exit` and `pre_transition` have already been called, and
+///                     // `post_transition` and `on_enter` will be called
+///                     state
+///                 }
+///             }
+///         ],
+///         // Optionally, you can add other events that can be raised on the state machine.
+///         // If the event appears in the `states` block, it does not need to be defined here.
+///         events: [
+///            CarPassed, // No matter the state, the default transition block will be used for this event
+///         ],
+///     }
+/// }
+///
+/// // Let's define a default for the traffic light.
+/// impl Default for TrafficLight {
+///     fn default() -> Self {
+///         TrafficLight::new(Red, TrafficLightContext::default())
+///     }
+/// }
+///
+/// // The context for the state machine.
+/// #[derive(Debug, Clone, Default)]
+/// pub struct TrafficLightContext {
+///    pub cars_count: u32,
+///    pub in_emergency: bool,
+/// }
+///
+/// // These are the states for the traffic light.
+/// // They can have fields of their own, but, in this case, they don't.
+///
+/// #[derive(Debug, Clone, Default)]
+/// struct Red;
+///
+/// #[derive(Debug, Clone, Default)]
+/// struct Yellow;
+///
+/// #[derive(Debug, Clone, Default)]
+/// struct Green;
+///
+/// // Implement the state trait for each state.
+/// impl TrafficLightStateTrait for Red {
+///    fn color(&self) -> TrafficLightColor {
+///       TrafficLightColor::Red
+///   }
+/// }
+///
+/// impl TrafficLightStateTrait for Yellow {
+///     fn color(&self) -> TrafficLightColor {
+///         TrafficLightColor::Yellow
+///     }
+/// }
+///
+/// impl TrafficLightStateTrait for Green {
+///     fn color(&self) -> TrafficLightColor {
+///         TrafficLightColor::Green
+///     }
+/// }
+///
+/// // These are the events that can be raised on the traffic light.
+/// pub struct Next;
+///
+/// pub struct CarPassed {
+///     pub emergency_vehicle: bool
+/// }
+///
+/// pub struct EmergencyVehicleApproaching {
+///    pub requested_color: TrafficLightColor,
+/// }
+///
+/// // Implement the event trait for each event.
+/// impl TrafficLightEventTrait for Next {}
+///
+/// // Without `#[async_trait::async_trait]`, you'll see a weird lifetime error:
+/// // "lifetimes do not match in trait"
+/// #[async_trait::async_trait]
+/// impl TrafficLightEventTrait for CarPassed {
+///     async fn pre_transition(&mut self, context: &mut TrafficLightContext) {
+///         context.cars_count += 1;
+///         println!("Car passed: {}", context.cars_count);
+///         // We could also await asynchronous work here
+///     }
+///
+///     async fn post_transition(&mut self, context: &mut TrafficLightContext) {
+///         if self.emergency_vehicle {
+///             context.in_emergency = false;
+///         }
+///     }
+/// }
+///
+/// impl TrafficLightEventTrait for EmergencyVehicleApproaching {
+///     fn is_emergency(&self) -> bool {
+///         true
+///     }
+/// }
+///
+/// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// pub enum TrafficLightColor {
+///    Red,
+///    Yellow,
+///    Green,
+/// }
+///
+/// impl From<TrafficLightColor> for TrafficLightState {
+///     fn from(color: TrafficLightColor) -> Self {
+///         match color {
+///             TrafficLightColor::Red => Red {}.into(),
+///             TrafficLightColor::Yellow => Yellow {}.into(),
+///             TrafficLightColor::Green => Green {}.into(),
+///         }    
+///     }
+/// }
+///
+/// # }
+/// # use traffic_light::*;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     // Create a new traffic light in the Red state, with a starting context.
+///     let mut traffic_light = TrafficLight::default();
+///
+///     // We can access the context and state of the traffic light
+///     // using the `context` and `state` methods, which return immutable references.
+///     assert_eq!(traffic_light.context().cars_count, 0);
+///     assert_eq!(traffic_light.context().in_emergency, false);
+///     assert_eq!(traffic_light.state().color(), TrafficLightColor::Red);
+///
+///     // A car passes:
+///     traffic_light.handle_event(CarPassed { emergency_vehicle: false }).await;
+///     println!("Context: {:?}", traffic_light.context());
+///     assert_eq!(traffic_light.context().cars_count, 1);
+///
+///     traffic_light.handle_event(Next).await;
+///     assert_eq!(traffic_light.state().color(), TrafficLightColor::Green);
+///     assert_eq!(traffic_light.context().cars_count, 1);
+///
+///     // Emergency event
+///     traffic_light.handle_event(EmergencyVehicleApproaching { requested_color: TrafficLightColor::Red }).await;
+///     assert_eq!(traffic_light.state().color(), TrafficLightColor::Red);
+///     assert_eq!(traffic_light.context().in_emergency, true);
+///
+///     // Car passes
+///     traffic_light.handle_event(CarPassed { emergency_vehicle: false }).await;
+///
+///     // Notice that cars_count is not incremented because the traffic light is in emergency,
+///     // which makes `should_exit` return false, preventing the transition, and the event's pre/post_transition methods from being called.
+///     assert_eq!(traffic_light.context().cars_count, 1);
+///     assert_eq!(traffic_light.context().in_emergency, true);
+///
+///     // Emergency vehicle passes
+///     traffic_light.handle_event(CarPassed { emergency_vehicle: true }).await;
+///     assert_eq!(traffic_light.context().cars_count, 2);
+///     assert_eq!(traffic_light.context().in_emergency, false);
+/// }
+/// ```
 #[proc_macro]
 pub fn event_driven_state_machine(
     input: TokenStream,

@@ -88,7 +88,7 @@ event_driven_state_machine!(
             fn color(&self) -> TrafficLightColor;
         },
         state_enum: #[derive(Debug)] #[derive(Clone)] TrafficLightMachineState,
-        transitions: [
+        states: [
             Red {
                 // From Red to Green when a TimeoutEvent occurs
                 TimeoutEvent {
@@ -154,8 +154,10 @@ event_driven_state_machine!(
                     println!("{:?}: Unhandled event: {:?}", Instant::now(), event);
                     state
                 }
-            }
+            },
         ],
+        // If we had events that weren't in the state blocks...
+        // events: [OtherEvent],
     }
 );
 

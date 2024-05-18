@@ -88,7 +88,7 @@ event_driven_state_machine!(async TrafficLight {
     state_trait: trait TrafficLightStateTrait {},
     event_enum: TrafficLightEvent,
     event_trait: trait TrafficLightEventTrait: Send {},
-    transitions: [
+    states: [
         Red {
             Next -> Green,
             StopRecording {
