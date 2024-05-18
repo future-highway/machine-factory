@@ -660,8 +660,22 @@ pub(super) fn event_driven_state_machine(
     };
 
     let unhandled_event = unhandled_event.map(|block| {
+        let function_ident = Ident::new(
+            "handle__unhandled_event",
+            block.span(),
+        );
+
         quote! {
-            (state, event) => #block
+            (state, event) => {
+                #[allow(non_snake_case)]
+                #asyncness fn #function_ident(
+                    mut state: #state_enum_ident,
+                    event: &mut #event_enum_ident,
+                    context: &mut #context_path,
+                ) -> impl Into<#state_enum_ident> #block
+                    
+                #function_ident(state, event, &mut self.context)#async_postfix.into()
+            }
         }
     });
 

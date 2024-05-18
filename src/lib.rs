@@ -131,7 +131,7 @@ mod state_trait;
 ///             // You can optionally define a catch-all transition that applies to all state/event pairs not explicitly defined.
 ///             _ {
 ///                 if let TrafficLightEvent::EmergencyVehicleApproaching(EmergencyVehicleApproaching { requested_color }) = event {
-///                     self.context.in_emergency = true;
+///                     context.in_emergency = true;
 ///                     TrafficLightState::from(*requested_color)
 ///                 } else {
 ///                     // We are going to remain in the same state.
