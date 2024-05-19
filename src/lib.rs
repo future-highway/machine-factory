@@ -305,7 +305,6 @@ mod state_trait;
 ///
 ///     // A car passes:
 ///     traffic_light.handle_event(CarPassed { emergency_vehicle: false }).await;
-///     println!("Context: {:?}", traffic_light.context());
 ///     assert_eq!(traffic_light.context().cars_count, 1);
 ///
 ///     traffic_light.handle_event(Next).await;
