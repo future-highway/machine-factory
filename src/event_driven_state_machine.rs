@@ -439,6 +439,7 @@ pub(super) fn event_driven_state_machine(
                 quote! {
                     (#state_enum_ident::#state_ident(state), #event_enum_ident::#event_ident(event)) => {
                         #[allow(non_snake_case)]
+                        #[allow(clippy::unused_async)]
                         #asyncness fn #function_ident(
                             mut state: #state_path,
                             event: &mut #event_path,
@@ -668,6 +669,7 @@ pub(super) fn event_driven_state_machine(
         quote! {
             (state, event) => {
                 #[allow(non_snake_case)]
+                #[allow(clippy::unused_async)]
                 #asyncness fn #function_ident(
                     mut state: #state_enum_ident,
                     event: &mut #event_enum_ident,

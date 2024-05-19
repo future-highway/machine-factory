@@ -16,14 +16,54 @@ mod state_trait;
 /// event is handled, a series of functions are called in
 /// the following order:
 ///
-/// 1. `should_exit` on the current state (returning `false`
-///    stops the transition)
-/// 2. `on_exit` on the current state
-/// 3. `pre_transition` on the event
-/// 4. A transition block, defined in the state machine
-///    macro that must return the new state
-/// 5. `post_transition` on the event
-/// 6. `on_enter` on the new state
+/// ```ignore
+/// CurrentState::should_exit(&self, &context, &event)
+/// CurrentState::on_exit(&mut self, &mut context)
+/// Event::pre_transition(&mut self, &mut context)
+/// {
+///     // TransitionBlock defined in the state machine macro
+///     // that must return the new state.
+///     // The following variables are available:
+///     // - `mut state`: the current state
+///     // - `&mut context`: the context
+///     // - `&mut event`: the event
+/// }
+/// Event::post_transition(&mut self, &mut context)
+/// NewState::on_enter(&mut self, &mut context)
+/// ```
+///
+/// # Syntax
+/// ```text
+/// event_driven_state_machine! {
+///     [ Attribute [ Attribute ]* ]
+///     [ Visibility ] [ async ] [ struct ] Identifier {
+///         context: Path,
+///         state_enum: [ Attribute [ Attribute ]* ] Identifier,
+///         state_trait: Trait,
+///         event_enum: [ Attribute [ Attribute ]* ] Identifier,
+///         event_trait: Trait,
+///         states: LeftBracket
+///             [ StateTransition [, StateTransition]* ]
+///             [ _ { DefaultTransitionBlock } ]
+///         RightBracket,
+///         events: LeftBracket
+///            [ Path [, Path]* ]
+///         RightBracket,
+///     }
+/// }
+///
+/// Attribute = a valid Rust outer attribute (e.g., `#[derive(Debug)]`)
+/// Visibility = a valid Rust visibility modifier (e.g., `pub`, `pub(crate)`, etc.)
+/// Identifier = a valid Rust identifier (e.g., `MyStateMachine`)
+/// Path = a valid Rust path (e.g., `crate::MyContext` or `MyContext`)
+/// Trait = a valid Rust trait definition (e.g., `pub trait MyTrait { ... }`)
+/// LeftBracket = [
+/// RightBracket = ]
+/// StateTransition = Path { [ DefaultTransition | TransitionBlock [, DefaultTransition | TransitionBlock ]* ] }
+/// DefaultTransition = Path -> Path
+/// TransitionBlock = Path { ... } (where `...` is a block of Rust code that returns a state)
+/// DefaultTransitionBlock = 1 or more Rust statements that return a state
+/// ```
 ///
 /// # Example
 /// The following example defines a traffic-light state
@@ -304,6 +344,30 @@ pub fn event_driven_state_machine(
 ///
 /// Since the state machine is deterministic, transitions
 /// are enforced at compile time.
+///
+/// # Syntax
+/// ```text
+/// deterministic_state_machine! {
+///     [ Attribute [ Attribute ]* ]
+///     [ Visibility ] [ struct ] Identifier {
+///         context: Path,
+///       [ state_trait: [ Trait ], ]
+///         states: LeftBracket
+///            [ StateTransition [, StateTransition]* ]
+///         RightBracket,
+///     }
+/// }
+///
+/// Attribute = a valid Rust outer attribute (e.g., `#[derive(Debug)]`)
+/// Visibility = a valid Rust visibility modifier (e.g., `pub`, `pub(crate)`, etc.)
+/// Identifier = a valid Rust identifier (e.g., `MyStateMachine`)
+/// Path = a valid Rust path (e.g., `crate::MyContext` or `MyContext`)
+/// Trait = a valid Rust trait definition (e.g., `pub trait MyTrait { ... }`)
+/// LeftBracket = [
+/// RightBracket = ]
+/// StateTransition = Path { [ Function ]* }
+/// Function = a valid Rust function definition (e.g., `pub fn my_transition(self) -> MyNextState  { ... }`)
+/// ```
 ///
 /// # Example
 /// The following example defines a simple traffic-light
